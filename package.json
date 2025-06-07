@@ -1,0 +1,80 @@
+{
+  "name": "Mora",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Aprende a enseñarte",
+  "author": "Drakxard <drakxard@gmail.com>",
+  "main": "electron-main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron-dev": "concurrently \"npm run dev\" \"electron .\"",
+    "build-web": "vite build",
+    "build-electron-dev": "electron-builder --dir",
+    "dist": "npm run build-web && electron-builder"
+  },
+  "dependencies": {
+    "@ai-sdk/groq": "1.2.9",
+    "@nanostores/react": "^0.7.3",
+    "ai": "^3.4.32",
+    "clsx": "^2.1.1",
+    "electron-is-dev": "^2.0.0",
+    "electron-log": "^5.1.1",
+    "electron-updater": "^6.2.1",
+    "lucide-react": "^0.460.0",
+    "nanostores": "^0.11.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^8.2.2",
+    "electron": "30.0.0",
+    "electron-builder": "^24.13.1",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.14",
+    "typescript": "~5.6.2",
+    "typescript-eslint": "^8.10.0",
+    "vite": "^5.4.10"
+  },
+  "build": {
+    "appId": "com.audioexplorer.app",
+    "productName": "Audio Explorer",
+    "icon": "assets/icon",
+    "files": ["dist/**/*", "electron-main.js", "preload.js"],
+    "directories": {
+      "output": "dist-electron"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility",
+      "icon": "assets/icon.png"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Drakxard",
+      "repo": "Mora",
+      "private": false
+    }
+  }
+}
