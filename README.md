@@ -7,8 +7,10 @@ Aprende a enseñarte
 
 path: 
 >Audio-Explorer-Setup-0.1.0.exe
+
 sha512: 
 >T/EBuMkkqvViA1iQAzpvmS6NI931BlK61StO/Ar2RWVPuiAxXvpahdr3nJUC3iKsLBUZLfkVvuOejGPNnN68cQ==
+
 releaseDate: 
 >'2025-06-07T17:32:52.177Z'
 
