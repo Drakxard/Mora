@@ -1,3 +1,120 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Estilos personalizados para scrollbar */
+@layer utilities {
+  /* Scrollbar delgado */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(75 85 99) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(75 85 99);
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(107 114 128);
+  }
+
+  /* Scrollbar oculto */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Scroll suave */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+
+  /* Animación de pulso lenta */
+  .animate-pulse-slow {
+    animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-slow {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+/* Estilos base para variables de color */
+@layer base {
+  :root {
+    --background: 0 0% 3.9%;
+    --background-secondary: 0 0% 7%;
+    --background-tertiary: 0 0% 10%;
+    --text-primary: 0 0% 98%;
+    --text-secondary: 0 0% 80%;
+    --text-tertiary: 0 0% 60%;
+    --primary: 263 70% 50%;
+    --primary-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 263 70% 50%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--text-primary));
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Estilos adicionales para componentes */
+@layer components {
+  /* Estilo para elementos con scroll personalizado */
+  .custom-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(75 85 99 / 0.5) transparent;
+  }
+
+  .custom-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scroll::-webkit-scrollbar-track {
+    background: rgb(31 41 55 / 0.1);
+    border-radius: 4px;
+  }
+
+  .custom-scroll::-webkit-scrollbar-thumb {
+    background: rgb(75 85 99 / 0.5);
+    border-radius: 4px;
+    border: 1px solid rgb(31 41 55 / 0.1);
+  }
+
+  .custom-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgb(107 114 128 / 0.7);
+  }
+
+  .custom-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useEffect, useState } from "react"
-import { X, RefreshCw } from "lucide-react"
+import { X, RefreshCw, CheckCircle } from "lucide-react"
 import type { FileItem, TranscriptionResponse } from "../../types"
 import { transcribeAudio } from "../../utils/transcription"
 import Button from "../ui/Button"
@@ -28,15 +28,18 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
   const [transcription, setTranscription] = useState<string>("")
   const [error, setError] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
+  const [usingExisting, setUsingExisting] = useState(false)
 
   useEffect(() => {
     if (isOpen && file) {
       if (existingTranscription) {
         // Si ya hay una transcripción, mostrarla
         setTranscription(existingTranscription)
+        setUsingExisting(true)
         setError("")
       } else {
         // Si no hay transcripción, generar una nueva
+        setUsingExisting(false)
         handleTranscribe()
       }
     }
@@ -55,7 +58,7 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
 
     setIsLoading(true)
     setError("")
-    setTranscription("")
+    setUsingExisting(false)
 
     try {
       console.log("Iniciando transcripción para:", file.name)
@@ -131,8 +134,11 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
               <p className="text-text-tertiary text-sm mt-1">Modelo: {selectedModel || "No seleccionado"}</p>
               <p className="text-text-tertiary text-sm mt-1">Tipo: {file.type}</p>
               <p className="text-text-tertiary text-sm mt-1">URL disponible: {file.url ? "Sí" : "No"}</p>
-              {existingTranscription && (
-                <p className="text-green-400 text-sm mt-1">✓ Transcripción guardada disponible</p>
+              {usingExisting && (
+                <div className="flex items-center mt-2 text-green-400 text-sm">
+                  <CheckCircle size={16} className="mr-2" />
+                  <span>Usando transcripción guardada</span>
+                </div>
               )}
             </div>
           )}
@@ -174,7 +180,7 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
           <div>
             {(transcription || error) && !isLoading && (
               <Button onClick={handleRegenerate} variant="secondary" leftIcon={<RefreshCw size={16} />}>
-                {error ? "Reintentar" : "Regenerar"}
+                {error ? "Reintentar" : usingExisting ? "Retranscribir" : "Regenerar"}
               </Button>
             )}
           </div>

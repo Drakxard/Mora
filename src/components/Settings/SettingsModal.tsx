@@ -62,10 +62,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   }
 
   const handleDeleteApiKey = () => {
-    if (confirm("¿Estás seguro de que quieres eliminar tu API key? Tendrás que configurarla nuevamente.")) {
+    if (
+      confirm(
+        "¿Estás seguro de que quieres eliminar tu API key?\n\nEsto eliminará:\n- Tu API key\n- Todas las transcripciones guardadas\n- Los modelos seleccionados\n- Tendrás que configurar todo nuevamente",
+      )
+    ) {
+      // Eliminar la API key y todos los datos relacionados
       deleteUserApiKey()
+
+      // Actualizar el estado local
       setApiKey("")
-      setSuccess("API key eliminada correctamente")
+      setSuccess("API key y datos relacionados eliminados correctamente")
+
+      // Mostrar mensaje y recargar después de un breve delay
+      setTimeout(() => {
+        setSuccess("Recargando aplicación...")
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      }, 1500)
     }
   }
 

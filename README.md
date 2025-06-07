@@ -1,2 +1,2 @@
 # Mora
-Aprender más fácil
+Aprender a enseñarte

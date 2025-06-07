@@ -253,6 +253,74 @@ const Explorer: React.FC = () => {
     }
   }, [files])
 
+  // Efecto para monitorear el estado de la API key y resetear funcionalidades dependientes
+  useEffect(() => {
+    const checkApiKeyStatus = () => {
+      const apiKeyConfigured = isApiKeyConfigured()
+
+      // Si no hay API key configurada, resetear estados que dependen de ella
+      if (!apiKeyConfigured) {
+        // Cerrar modales que requieren API key
+        if (isTranscriptionModalOpen) {
+          setIsTranscriptionModalOpen(false)
+          setTranscribeFile(null)
+        }
+
+        if (isChatOpen) {
+          setIsChatOpen(false)
+        }
+
+        // Limpiar archivos transcritos del chat
+        if (transcribedFiles.length > 0) {
+          setTranscribedFiles([])
+        }
+
+        // Limpiar transcripciones guardadas del estado
+        if (savedTranscriptions.size > 0) {
+          setSavedTranscriptions(new Map())
+        }
+
+        // Resetear modelos seleccionados
+        setTranscriptionModel("")
+        setChatModel("")
+
+        console.log("🔄 Estados dependientes de API key reseteados")
+      }
+    }
+
+    // Verificar inmediatamente
+    checkApiKeyStatus()
+
+    // Configurar un intervalo para verificar periódicamente
+    const interval = setInterval(checkApiKeyStatus, 1000)
+
+    return () => clearInterval(interval)
+  }, [isTranscriptionModalOpen, isChatOpen, transcribedFiles.length, savedTranscriptions.size])
+
+  // Add this effect after the other useEffect hooks
+  useEffect(() => {
+    // Check if API key is configured on every render
+    const apiKeyConfigured = isApiKeyConfigured()
+
+    // If no API key is configured but we have transcribed files or chat open,
+    // reset those states as they require an API key to function
+    if (!apiKeyConfigured) {
+      if (transcribedFiles.length > 0) {
+        setTranscribedFiles([])
+      }
+
+      if (isChatOpen) {
+        setIsChatOpen(false)
+      }
+
+      // If we're trying to transcribe without an API key, show the setup modal
+      if (isTranscriptionModalOpen) {
+        setIsTranscriptionModalOpen(false)
+        setShowApiKeySetup(true)
+      }
+    }
+  }, [transcribedFiles.length, isChatOpen, isTranscriptionModalOpen])
+
   // Directory operations
   const handleOpenDirectory = async () => {
     // Si estamos en Electron, usar el diálogo nativo
@@ -404,6 +472,13 @@ const Explorer: React.FC = () => {
 
   // Transcription handlers
   const handleTranscribe = (file: FileItem) => {
+    // Verificar que la API key esté configurada
+    if (!isApiKeyConfigured()) {
+      alert("No hay API key configurada. Por favor, configura tu API key en Configuración.")
+      setShowApiKeySetup(true)
+      return
+    }
+
     if (!transcriptionModel) {
       alert("Por favor, selecciona un modelo de transcripción primero.")
       return
@@ -438,6 +513,13 @@ const Explorer: React.FC = () => {
 
   // Función para agregar transcripción al chat
   const handleAddToChat = (file: FileItem) => {
+    // Verificar que la API key esté configurada
+    if (!isApiKeyConfigured()) {
+      alert("No hay API key configurada. Por favor, configura tu API key en Configuración.")
+      setShowApiKeySetup(true)
+      return
+    }
+
     if (!chatModel) {
       alert("Por favor, selecciona un modelo de chat primero.")
       return
@@ -465,10 +547,28 @@ const Explorer: React.FC = () => {
   }
 
   const handleChat = (file: FileItem) => {
+    // Verificar que la API key esté configurada
+    if (!isApiKeyConfigured()) {
+      alert("No hay API key configurada. Por favor, configura tu API key en Configuración.")
+      setShowApiKeySetup(true)
+      return
+    }
+
     if (!chatModel) {
       alert("Por favor, selecciona un modelo de chat primero.")
       return
     }
+
+    // Verificar si el archivo tiene transcripción
+    const transcription = savedTranscriptions.get(file.path)
+
+    // Si tiene transcripción y no está ya en el chat, agregarla automáticamente
+    if (transcription && !transcribedFiles.some((item) => item.file.path === file.path)) {
+      setTranscribedFiles((prev) => [...prev, { file, transcription }])
+      console.log(`Archivo ${file.name} agregado automáticamente al chat`)
+    }
+
+    // Abrir el chat en cualquier caso
     setIsChatOpen(true)
   }
 
@@ -506,7 +606,10 @@ const Explorer: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-background text-text-primary">
-      <div className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth">
+      <div
+        className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth"
+        style={{ paddingBottom: currentAudioFile ? "140px" : "0" }}
+      >
         <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ModelSelector type="transcription" value={transcriptionModel} onChange={setTranscriptionModel} />
