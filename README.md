@@ -19,3 +19,5 @@ releaseDate:
 > echo "T/EBuMkkq...N68cQ==  Audio-Explorer-Setup-0.1.0.exe" \
 >   | sha512sum --check
 > ```
+
+Mega: https://mega.nz/file/vxsyDSja#G8-jhxn4pDKbAsUzF5bAket7JD3e7cAPSdQCLeRGNHk
