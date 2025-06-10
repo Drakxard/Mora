@@ -24,11 +24,40 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
   const minHeight = 80
   const maxHeight = 120
 
+  // Función para ordenar archivos numéricamente
+  const sortAudioFilesNumerically = (files: FileItem[]): FileItem[] => {
+    return [...files].sort((a, b) => {
+      // Extraer números del nombre del archivo
+      const getNumber = (fileName: string) => {
+        const match = fileName.match(/(\d+)/)
+        return match ? Number.parseInt(match[1], 10) : 0
+      }
+
+      const numA = getNumber(a.name)
+      const numB = getNumber(b.name)
+
+      // Si ambos tienen números, ordenar por número
+      if (numA !== 0 && numB !== 0) {
+        return numA - numB
+      }
+
+      // Si solo uno tiene número, el que tiene número va primero
+      if (numA !== 0 && numB === 0) return -1
+      if (numA === 0 && numB !== 0) return 1
+
+      // Si ninguno tiene número, ordenar alfabéticamente
+      return a.name.localeCompare(b.name)
+    })
+  }
+
+  // Ordenar archivos de audio numéricamente
+  const sortedAudioFiles = sortAudioFilesNumerically(audioFiles)
+
   // Handle resize functionality
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
-      
+
       const newHeight = Math.max(minHeight, Math.min(maxHeight, window.innerHeight - e.clientY))
       setPlayerHeight(newHeight)
     }
@@ -38,13 +67,13 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
     }
 
     if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
     }
   }, [isResizing])
 
@@ -181,25 +210,25 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
   }
 
   const playNext = () => {
-    if (!currentFile || audioFiles.length <= 1) return
+    if (!currentFile || sortedAudioFiles.length <= 1) return
 
-    const currentIndex = audioFiles.findIndex((file) => file.path === currentFile.path)
-    const nextIndex = (currentIndex + 1) % audioFiles.length
-    onSelectFile(audioFiles[nextIndex])
+    const currentIndex = sortedAudioFiles.findIndex((file) => file.path === currentFile.path)
+    const nextIndex = (currentIndex + 1) % sortedAudioFiles.length
+    onSelectFile(sortedAudioFiles[nextIndex])
   }
 
   const playPrevious = () => {
-    if (!currentFile || audioFiles.length <= 1) return
+    if (!currentFile || sortedAudioFiles.length <= 1) return
 
-    const currentIndex = audioFiles.findIndex((file) => file.path === currentFile.path)
-    const prevIndex = (currentIndex - 1 + audioFiles.length) % audioFiles.length
-    onSelectFile(audioFiles[prevIndex])
+    const currentIndex = sortedAudioFiles.findIndex((file) => file.path === currentFile.path)
+    const prevIndex = (currentIndex - 1 + sortedAudioFiles.length) % sortedAudioFiles.length
+    onSelectFile(sortedAudioFiles[prevIndex])
   }
 
   if (!currentFile) return null
 
   return (
-    <div 
+    <div
       className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-background-secondary via-background-secondary to-background-secondary border-t border-background-tertiary shadow-2xl backdrop-blur-sm"
       style={{ height: `${playerHeight}px` }}
     >
@@ -223,7 +252,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
             <div className="min-w-0">
               <h3 className="text-text-primary font-medium truncate text-sm">{currentFile.name}</h3>
               <p className="text-text-tertiary text-xs">
-                {audioFiles.findIndex((f) => f.path === currentFile.path) + 1} de {audioFiles.length}
+                {sortedAudioFiles.findIndex((f) => f.path === currentFile.path) + 1} de {sortedAudioFiles.length}
               </p>
             </div>
           </div>

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { X, Send, Loader2, Bot, Trash2, MessageSquarePlus } from "lucide-react"
+import { X, Send, Loader2, Bot, Trash2, MessageSquarePlus } from 'lucide-react'
 import type { FileItem, ChatMessage } from "../../types"
 import Button from "../ui/Button"
 import { cn } from "../../utils/cn"
@@ -10,6 +10,7 @@ import ActiveAudioBadge from "./ActiveAudioBadge"
 import ImageUpload from "./ImageUpload"
 import AudioUpload from "./AudioUpload"
 import { getModelCapabilities } from "../../utils/groqModels"
+import { getApiKey } from "../../utils/storage" // ✅ IMPORTAR getApiKey
 
 interface ChatPanelProps {
   isOpen: boolean
@@ -116,6 +117,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   }
 
   const transcribeAudio = async (audioFile: File): Promise<string> => {
+    // ✅ Usar la API key del usuario
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      throw new Error("API key de Groq no encontrada. Por favor configura tu API key en los ajustes.")
+    }
+
     const formData = new FormData()
     formData.append("file", audioFile)
     formData.append("model", "whisper-large-v3-turbo")
@@ -124,7 +131,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`, // ✅ USA LA API KEY DEL USUARIO
       },
       body: formData,
     })
@@ -214,8 +221,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     setIsLoading(true)
 
     try {
-      if (!import.meta.env.VITE_GROQ_API_KEY) {
-        throw new Error("API key de Groq no encontrada")
+      // ✅ Verificar API key del usuario
+      const apiKey = getApiKey()
+      if (!apiKey) {
+        throw new Error("API key de Groq no encontrada. Por favor configura tu API key en los ajustes.")
       }
 
       const transcription = transcribedFiles[activeFileIndex]?.transcription || ""
@@ -275,7 +284,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`, // ✅ USA LA API KEY DEL USUARIO
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

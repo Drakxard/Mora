@@ -39,9 +39,26 @@ const FileList: React.FC<FileListProps> = ({
     <div className="space-y-1">
       {[...files]
         .sort((a, b) => {
-          const getNumber = (fileName: string) => Number.parseInt(fileName.match(/\d+/)?.[0] || "0", 10)
+          // Extraer números del nombre del archivo
+          const getNumber = (fileName: string) => {
+            const match = fileName.match(/(\d+)/)
+            return match ? Number.parseInt(match[1], 10) : 0
+          }
 
-          return getNumber(a.name) - getNumber(b.name)
+          const numA = getNumber(a.name)
+          const numB = getNumber(b.name)
+
+          // Si ambos tienen números, ordenar por número
+          if (numA !== 0 && numB !== 0) {
+            return numA - numB
+          }
+
+          // Si solo uno tiene número, el que tiene número va primero
+          if (numA !== 0 && numB === 0) return -1
+          if (numA === 0 && numB !== 0) return 1
+
+          // Si ninguno tiene número, ordenar alfabéticamente
+          return a.name.localeCompare(b.name)
         })
         .map((file) => (
           <FileItem

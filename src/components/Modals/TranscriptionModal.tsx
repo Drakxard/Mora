@@ -7,6 +7,7 @@ import type { FileItem, TranscriptionResponse } from "../../types"
 import { transcribeAudio } from "../../utils/transcription"
 import Button from "../ui/Button"
 import { formatFileSize } from "../../utils/format"
+import { getApiKey, isApiKeyConfigured } from "../../utils/storage" // ✅ IMPORTAR funciones de storage
 
 interface TranscriptionModalProps {
   isOpen: boolean
@@ -65,9 +66,12 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
       console.log("URL del archivo:", file.url)
       console.log("Modelo seleccionado:", selectedModel)
 
-      // Verificar que la API key esté configurada
-      if (!import.meta.env.VITE_GROQ_API_KEY) {
-        throw new Error("VITE_GROQ_API_KEY no está configurada en las variables de entorno.")
+      // ✅ Verificar que la API key del usuario esté configurada
+      const apiKey = getApiKey()
+      if (!apiKey) {
+        throw new Error(
+          "API key de Groq no encontrada. Por favor configura tu API key en los ajustes de la aplicación.",
+        )
       }
 
       // Fetch the file as a blob
@@ -158,7 +162,7 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
                 <details className="mt-2">
                   <summary className="text-red-400 text-sm cursor-pointer">Información de depuración</summary>
                   <div className="text-red-300 text-xs mt-2">
-                    <p>API Key configurada: {import.meta.env.VITE_GROQ_API_KEY ? "Sí" : "No"}</p>
+                    <p>API Key configurada: {isApiKeyConfigured() ? "Sí" : "No"}</p> {/* ✅ USA isApiKeyConfigured() */}
                     <p>Archivo: {file?.name}</p>
                     <p>Tipo: {file?.type}</p>
                     <p>URL: {file?.url ? "Disponible" : "No disponible"}</p>

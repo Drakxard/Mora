@@ -1,4 +1,5 @@
 // utils/groqModels.ts
+import { getApiKey } from "./storage"
 
 export interface GroqModel {
   id: string
@@ -21,14 +22,17 @@ export interface GroqModelsResponse {
 
 export async function fetchGroqModels(): Promise<GroqModel[]> {
   try {
-    if (!import.meta.env.VITE_GROQ_API_KEY) {
-      console.warn("VITE_GROQ_API_KEY no está configurada")
+    // ✅ Usar la API key del usuario dinámicamente
+    const apiKey = getApiKey()
+
+    if (!apiKey) {
+      console.warn("No hay API key configurada del usuario")
       return []
     }
 
     const res = await fetch("https://api.groq.com/openai/v1/models", {
       headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`, // ✅ USA LA API KEY DEL USUARIO
         "Content-Type": "application/json",
       },
     })
@@ -46,7 +50,7 @@ export async function fetchGroqModels(): Promise<GroqModel[]> {
         try {
           const detailRes = await fetch(`https://api.groq.com/openai/v1/models/${model.id}`, {
             headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+              Authorization: `Bearer ${apiKey}`, // ✅ USA LA API KEY DEL USUARIO
               "Content-Type": "application/json",
             },
           })

@@ -23,3 +23,19 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+
+# Node.js
+node_modules/
+dist/
+dist-electron/
+
+# Sistema operativo
+.DS_Store
+	Thumbs.db
+
+# Archivos de construcción
+*.tsbuildinfo
+
+
+certs/*.pfx
