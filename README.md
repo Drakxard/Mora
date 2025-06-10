@@ -3,21 +3,12 @@ Aprende a enseñarte
 
 
 
-## Descarga (Windows)
-Mega: https://mega.nz/file/vxsyDSja#G8-jhxn4pDKbAsUzF5bAket7JD3e7cAPSdQCLeRGNHk
-
+## [Descarga (Windows)](https://mega.nz/file/SwkH0C4T#oNDHvLaAGh9zmBYxw2d5YGDaWiM6eSwLMDSMfftjBoo)
 path: 
->Audio-Explorer-Setup-0.1.0.exe
+>Mora---Audio-Explorer-Setup-0.1.0.exe
 
 sha512: 
->T/EBuMkkqvViA1iQAzpvmS6NI931BlK61StO/Ar2RWVPuiAxXvpahdr3nJUC3iKsLBUZLfkVvuOejGPNnN68cQ==
+>z8SWLOO5X5OOmsHdbdlD6j3aiO5YWduxdf91SRfpAntC2uI6+Q/2IVYWVvk/8o17v9H6c6JI9PYNKQdUCE39Ew==
 
 releaseDate: 
->'2025-06-07T17:32:52.177Z'
-
-> Para verificar la integridad:
-> ```bash
-> echo "T/EBuMkkq...N68cQ==  Audio-Explorer-Setup-0.1.0.exe" \
->   | sha512sum --check
-> ```
-
+>'2025-06-10T01:12:04.324Z'
