@@ -1,5 +1,6 @@
 # Mora
-Aprende a enseñarte
+Relaciona conceptos, aprende de ti mism@. 
+Sólo así mejoras
 
 
 
