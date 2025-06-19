@@ -4,12 +4,13 @@ Sólo así mejoras
 
 
 
-## [Descarga (Windows)](https://mega.nz/file/SwkH0C4T#oNDHvLaAGh9zmBYxw2d5YGDaWiM6eSwLMDSMfftjBoo)
+## [Descarga (Windows)](https://mega.nz/file/C092FSaI#DBb8Mr8N-FQuXelMfSbRk6dGmeFr6dpP4favNnNadJY)
 path: 
 >Mora---Audio-Explorer-Setup-0.1.0.exe
 
 sha512: 
->z8SWLOO5X5OOmsHdbdlD6j3aiO5YWduxdf91SRfpAntC2uI6+Q/2IVYWVvk/8o17v9H6c6JI9PYNKQdUCE39Ew==
+>UTfCBon9VZ3bCIOWCJrNtw3gHVjigPhscszNZikqFuQipHWwQeMtPTfOtXDiC2tsPFTCbXnbzLMB4vPCLVqpnQ==
 
 releaseDate: 
->'2025-06-10T01:12:04.324Z'
+>'2025-06-17T15:45:18.561Z'
+
