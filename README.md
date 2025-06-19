@@ -1,6 +1,8 @@
 # Mora
 Navega entre los conceptos, transcribelos -> respuestas contextualizadas
-![Animation](https://github.com/user-attachments/assets/9b2f85d1-cfcc-4630-84e8-8ebe6bf47d21)
+
+![Animation](https://github.com/user-attachments/assets/a5e6b6ee-603a-4e3a-83fd-75e5580301c0)
+
 
 Usando api de groq (Modelos LLM y Audio)
 ## [Descarga (Windows)](https://mega.nz/file/C092FSaI#DBb8Mr8N-FQuXelMfSbRk6dGmeFr6dpP4favNnNadJY)
