@@ -28,6 +28,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const [fileName, setFileName] = useState("")
   const [error, setError] = useState("")
   const [savedFileName, setSavedFileName] = useState("")
+  const [hasRequestedAudio, setHasRequestedAudio] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
@@ -36,6 +37,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
     if (isOpen) {
       setError("")
       setSavedFileName("")
+      setHasRequestedAudio(false)
       setTimeout(() => textAreaRef.current?.focus(), 0)
     }
   }, [isOpen])
@@ -81,6 +83,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
     }
 
     setIsGenerating(true)
+    setHasRequestedAudio(true)
     setError("")
     resetPreview()
 
@@ -221,7 +224,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
             Cancelar
           </Button>
           <div className="flex gap-3">
-            {audio && (
+            {hasRequestedAudio && (
               <Button
                 onClick={handleGenerate}
                 variant="secondary"
