@@ -65,6 +65,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
   // Función para obtener el nombre amigable del modelo
   const getModelDisplayName = (modelId: string) => {
     const nameMap: Record<string, string> = {
+      "whisper-large-v3": "Whisper Large v3",
       "whisper-large-v3-turbo": "Whisper Large v3 Turbo",
       "distil-whisper-large-v3-en": "Distil Whisper Large v3 EN",
       "llama-3.1-8b-instant": "Llama 3.1 8B Instant",
@@ -131,11 +132,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
     return baseDesc
   }
 
+  const modelTypeLabel = type === "transcription" ? "transcripción" : type === "tts" ? "tts" : "chat"
+
   return (
     <div className={className}>
       <div className="flex items-center justify-between mb-1">
         <label htmlFor={`model-select-${type}`} className="block text-sm font-medium text-text-primary">
-          Modelo de {type === "transcription" ? "transcripción" : type === "tts" ? "tts" : "chat"}:
+          Modelo de {modelTypeLabel}:
         </label>
         <Button
           variant="ghost"
@@ -160,7 +163,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
           {models.isLoading ? "Cargando modelos..." : "— Selecciona un modelo —"}
         </option>
         {availableModels.map((model) => (
-          <option key={model.id} value={model.id}>
+          <option key={model.id} value={model.id} title={getModelDescription(model.id)}>
             {getModelDisplayName(model.id)}
           </option>
         ))}

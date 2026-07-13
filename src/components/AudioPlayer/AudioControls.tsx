@@ -76,106 +76,88 @@ const AudioControls: React.FC<AudioControlsProps> = ({
 
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0
 
+  const iconButtonClass =
+    "inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-background-tertiary hover:text-text-primary"
+
   return (
-    <div className="flex flex-col w-full">
-      {/* Control buttons */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-1">
-          <button
-            onClick={toggleMute}
-            className="p-2 text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-background-tertiary"
-          >
-            {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-          </button>
+    <div className="flex w-full items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1">
+        <button onClick={onPrevious} className={iconButtonClass} title="Anterior" aria-label="Anterior">
+          <SkipBack size={18} />
+        </button>
 
-          <div className="relative w-20 h-6 group">
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={isMuted ? 0 : volume}
-              onChange={handleVolumeChange}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            />
-            <div className="h-1 bg-background-tertiary rounded-full w-full relative top-2.5 group-hover:h-1.5 transition-all">
-              <div
-                className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full absolute top-0 left-0 transition-all"
-                style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={onPrevious}
-            className="p-2 text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-background-tertiary"
-            title="Pista anterior"
-          >
-            <SkipBack size={20} />
-          </button>
+        <button onClick={onSkipBackward} className={iconButtonClass} title="-5s" aria-label="Retroceder 5 segundos">
+          <RotateCcw size={16} />
+        </button>
 
-          <button
-            onClick={onSkipBackward}
-            className="p-2 text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-background-tertiary"
-            title="Retroceder 5s"
-          >
-            <RotateCcw size={18} />
-          </button>
+        <button
+          onClick={onPlayPause}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary/90"
+          aria-label={isPlaying ? "Pausar" : "Reproducir"}
+          title={isPlaying ? "Pausar" : "Reproducir"}
+        >
+          {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+        </button>
 
-          <button
-            onClick={onPlayPause}
-            className="p-3 bg-gradient-to-r from-primary to-primary/80 rounded-full text-white hover:from-primary/90 hover:to-primary/70 transition-all transform hover:scale-105 shadow-lg"
-          >
-            {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
-          </button>
+        <button onClick={onSkipForward} className={iconButtonClass} title="+5s" aria-label="Adelantar 5 segundos">
+          <RotateCw size={16} />
+        </button>
 
-          <button
-            onClick={onSkipForward}
-            className="p-2 text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-background-tertiary"
-            title="Adelantar 5s"
-          >
-            <RotateCw size={18} />
-          </button>
-
-          <button
-            onClick={onNext}
-            className="p-2 text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-background-tertiary"
-            title="Siguiente pista"
-          >
-            <SkipForward size={20} />
-          </button>
-        </div>
-        <div className="w-24"></div> {/* Spacer for balance */}
+        <button onClick={onNext} className={iconButtonClass} title="Siguiente" aria-label="Siguiente">
+          <SkipForward size={18} />
+        </button>
       </div>
 
-      {/* Progress bar - moved to bottom */}
-      <div className="flex items-center space-x-3">
-        <span className="text-xs text-text-secondary font-mono w-12 text-right">{formatTime(currentTime)}</span>
+      <span className="w-10 shrink-0 text-right font-mono text-[11px] text-text-tertiary">{formatTime(currentTime)}</span>
 
-        <div className="relative flex-1 h-6 group">
+      <div className="group relative h-7 min-w-24 flex-1">
+        <input
+          type="range"
+          min="0"
+          max={duration || 0}
+          value={currentTime}
+          onChange={handleSeek}
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+          tabIndex={-1}
+          aria-label="Progreso"
+        />
+        <div className="relative top-3 h-1 w-full rounded-full bg-background-tertiary transition-all group-hover:h-1.5">
+          <div
+            className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all"
+            style={{ width: `${progressPercentage}%` }}
+          />
+          <div
+            className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-primary opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ left: `calc(${progressPercentage}% - 5px)` }}
+          />
+        </div>
+      </div>
+
+      <span className="w-10 shrink-0 font-mono text-[11px] text-text-tertiary">{formatTime(duration)}</span>
+
+      <div className="hidden shrink-0 items-center gap-1 md:flex">
+        <button onClick={toggleMute} className={iconButtonClass} title="Volumen" aria-label="Volumen">
+          {isMuted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
+        </button>
+
+        <div className="group relative h-7 w-16">
           <input
             type="range"
             min="0"
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeek}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            tabIndex={-1}
+            max="1"
+            step="0.01"
+            value={isMuted ? 0 : volume}
+            onChange={handleVolumeChange}
+            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+            aria-label="Volumen"
           />
-          <div className="h-1 bg-background-tertiary rounded-full w-full relative top-2.5 group-hover:h-1.5 transition-all">
+          <div className="relative top-3 h-1 w-full rounded-full bg-background-tertiary transition-all group-hover:h-1.5">
             <div
-              className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full absolute top-0 left-0 transition-all"
-              style={{ width: `${progressPercentage}%` }}
-            />
-            <div
-              className="w-3 h-3 bg-primary rounded-full absolute top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-              style={{ left: `calc(${progressPercentage}% - 6px)` }}
+              className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all"
+              style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
             />
           </div>
         </div>
-
-        <span className="text-xs text-text-secondary font-mono w-12">{formatTime(duration)}</span>
       </div>
     </div>
   )

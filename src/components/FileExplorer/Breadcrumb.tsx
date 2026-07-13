@@ -4,19 +4,23 @@ import Button from '../ui/Button';
 
 interface BreadcrumbProps {
   path: string[];
+  rootLabel?: string;
   onNavigate: (index: number) => void;
   onGoBack: () => void;
   canGoBack: boolean;
+  rightAction?: React.ReactNode;
 }
 
 const Breadcrumb: React.FC<BreadcrumbProps> = ({ 
   path, 
+  rootLabel,
   onNavigate, 
   onGoBack, 
-  canGoBack 
+  canGoBack,
+  rightAction,
 }) => {
   return (
-    <div className="flex items-center p-2 bg-background-secondary rounded-md mb-4">
+    <div className="mb-4 flex items-center rounded-md bg-background-secondary p-2">
       <Button
         variant="ghost"
         size="sm"
@@ -28,12 +32,15 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({
         <ChevronLeft className="w-5 h-5 text-text-secondary" />
       </Button>
       
-      <div className="flex items-center overflow-x-auto py-1 scrollbar-hide">
+      <div className="flex min-w-0 flex-1 items-center overflow-x-auto py-1 scrollbar-hide">
         <button 
           onClick={() => onNavigate(-1)}
           className="flex items-center px-2 py-1 hover:bg-background-tertiary rounded transition-colors"
         >
           <Home size={16} className="text-primary" />
+          {rootLabel && path.length === 0 && (
+            <span className="ml-2 whitespace-nowrap text-text-secondary">{rootLabel}</span>
+          )}
         </button>
         
         {path.filter(Boolean).map((segment, index) => (
@@ -48,6 +55,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({
           </React.Fragment>
         ))}
       </div>
+      {rightAction && <div className="ml-auto flex flex-shrink-0 items-center pl-3">{rightAction}</div>}
     </div>
   );
 };

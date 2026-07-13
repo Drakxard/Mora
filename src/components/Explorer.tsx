@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
-import { FolderOpen, Settings } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { FolderOpen, Maximize2, Settings } from "lucide-react"
 import type { FileItem, DirectoryState } from "../types"
 import {
   openDirectory,
@@ -18,6 +18,7 @@ import {
   saveDirectoryHandle,
   getDirectoryHandle,
   getAllTranscriptions,
+  getSelectedModel,
   saveDirectoryPathElectron,
   getLastDirectory,
   isFirstRun,
@@ -26,17 +27,19 @@ import {
 } from "../utils/storage"
 import Breadcrumb from "./FileExplorer/Breadcrumb"
 import FileList from "./FileExplorer/FileList"
-import AudioPlayer from "./AudioPlayer/AudioPlayer"
+import AudioPlayer, { type AudioPlayerHandle } from "./AudioPlayer/AudioPlayer"
 import TranscriptionModal from "./Modals/TranscriptionModal"
 import ChatPanel from "./Chat/ChatPanel"
 import Button from "./ui/Button"
-import ModelSelector from "./ModelSelector"
 import ApiKeySetupModal from "./Modals/ApiKeySetupModal"
 import SettingsModal from "./Settings/SettingsModal"
 import TtsModal from "./Modals/TtsModal"
-import { generateTtsAudio } from "../utils/tts"
+import PresentationMode from "./PresentationMode"
+import { fetchGroqRateLimits, generateTtsAudio } from "../utils/tts"
 
 const TTS_METADATA_FILE = ".mora-tts.json"
+const PRESENTATION_BACKGROUNDS_DIR = "fondos"
+const PRESENTATION_BACKGROUND_EXTENSIONS = new Set(["jpg", "jpeg"])
 
 interface TtsMetadataEntry {
   text: string
@@ -54,9 +57,15 @@ const showConfirmDialog = async ({ title, message, detail }: { title: string; me
 
 const Explorer: React.FC = () => {
   // Model states
-  const [transcriptionModel, setTranscriptionModel] = useState<string>("")
-  const [chatModel, setChatModel] = useState<string>("")
-  const [ttsModel, setTtsModel] = useState<string>("")
+  const [transcriptionModel, setTranscriptionModel] = useState<string>(
+    () => getSelectedModel("transcription") || "whisper-large-v3",
+  )
+  const [chatModel, setChatModel] = useState<string>(
+    () => getSelectedModel("chat") || "llama-3.3-70b-versatile",
+  )
+  const [ttsModel, setTtsModel] = useState<string>(
+    () => getSelectedModel("tts") || "canopylabs/orpheus-arabic-saudi",
+  )
 
   // Directory and navigation states
   const [rootDirectoryHandle, setRootDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null)
@@ -74,6 +83,13 @@ const Explorer: React.FC = () => {
   const [currentAudioFile, setCurrentAudioFile] = useState<FileItem | null>(null)
   const [audioFiles, setAudioFiles] = useState<FileItem[]>([])
   const [ttsMetadata, setTtsMetadata] = useState<TtsMetadata>({})
+  const [presentationBackgroundUrls, setPresentationBackgroundUrls] = useState<string[]>([])
+  const [presentationBackgroundIndex, setPresentationBackgroundIndex] = useState(0)
+  const ttsMetadataRef = useRef<TtsMetadata>({})
+  const audioPlayerRef = useRef<AudioPlayerHandle>(null)
+  const presentationAudioPathRef = useRef<string | null>(null)
+  const [isPresentationOpen, setIsPresentationOpen] = useState(false)
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false)
   const [transcribeFile, setTranscribeFile] = useState<FileItem | null>(null)
   const [isTranscriptionModalOpen, setIsTranscriptionModalOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -90,6 +106,101 @@ const Explorer: React.FC = () => {
   // Verificar si estamos en Electron
   const isElectron = () => {
     return !!window.electron
+  }
+
+  const isPresentationBackgroundFile = (fileName: string) => {
+    const extension = fileName.split(".").pop()?.toLowerCase() || ""
+    return PRESENTATION_BACKGROUND_EXTENSIONS.has(extension)
+  }
+
+  const isHiddenRootFile = (file: FileItem, path: string[]) => {
+    return path.length === 0 && file.isDirectory && file.name.toLowerCase() === PRESENTATION_BACKGROUNDS_DIR
+  }
+
+  const replacePresentationBackgrounds = (urls: string[]) => {
+    setPresentationBackgroundUrls((currentUrls) => {
+      currentUrls.forEach((url) => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url)
+        }
+      })
+      return urls
+    })
+  }
+
+  const loadPresentationBackgroundsFromDirectory = async (directoryHandle: FileSystemDirectoryHandle) => {
+    try {
+      const backgroundsHandle = await directoryHandle.getDirectoryHandle(PRESENTATION_BACKGROUNDS_DIR)
+      const urls: string[] = []
+
+      for await (const entry of backgroundsHandle.values()) {
+        if (entry.kind !== "file" || !isPresentationBackgroundFile(entry.name)) continue
+
+        const file = await (entry as FileSystemFileHandle).getFile()
+        urls.push(URL.createObjectURL(file))
+      }
+
+      replacePresentationBackgrounds(urls)
+    } catch {
+      replacePresentationBackgrounds([])
+    }
+  }
+
+  const loadPresentationBackgroundsFromElectron = async (directoryPath: string) => {
+    if (!window.electron?.readDirectory) return
+
+    const backgroundsPath = `${directoryPath.replace(/[\\/]+$/, "")}/${PRESENTATION_BACKGROUNDS_DIR}`
+
+    try {
+      const backgroundFiles = await window.electron.readDirectory(backgroundsPath)
+      replacePresentationBackgrounds(
+        backgroundFiles
+          .filter((file: any) => !file.isDirectory && isPresentationBackgroundFile(file.name))
+          .map((file: any) => `file://${file.path.replace(/\\/g, "/")}`),
+      )
+    } catch {
+      replacePresentationBackgrounds([])
+    }
+  }
+
+  useEffect(() => {
+    ttsMetadataRef.current = ttsMetadata
+  }, [ttsMetadata])
+
+  useEffect(() => {
+    if (!currentAudioFile) {
+      setIsAudioPlaying(false)
+    }
+  }, [currentAudioFile])
+
+  useEffect(() => {
+    if (!isPresentationOpen) {
+      presentationAudioPathRef.current = null
+      setPresentationBackgroundIndex(0)
+      return
+    }
+
+    const currentPath = currentAudioFile?.path || null
+    if (presentationAudioPathRef.current === null) {
+      presentationAudioPathRef.current = currentPath
+      setPresentationBackgroundIndex(0)
+      return
+    }
+
+    if (currentPath && currentPath !== presentationAudioPathRef.current) {
+      presentationAudioPathRef.current = currentPath
+      setPresentationBackgroundIndex((index) => index + 1)
+    }
+  }, [currentAudioFile?.path, isPresentationOpen])
+
+  const getPresentationText = () => {
+    if (!currentAudioFile) return "Selecciona un audio para iniciar la presentación."
+
+    return (
+      ttsMetadata[currentAudioFile.name]?.text ||
+      savedTranscriptions.get(currentAudioFile.path) ||
+      currentAudioFile.name
+    )
   }
 
   const parseTtsMetadata = (contents: string | null): TtsMetadata => {
@@ -127,6 +238,7 @@ const Explorer: React.FC = () => {
 
   const saveTtsMetadata = async (nextMetadata: TtsMetadata) => {
     const contents = JSON.stringify(nextMetadata, null, 2)
+    ttsMetadataRef.current = nextMetadata
     setTtsMetadata(nextMetadata)
 
     if (isElectron() && window.electron?.writeTtsMetadata) {
@@ -173,7 +285,11 @@ const Explorer: React.FC = () => {
 
       // Convertir los archivos de Electron al formato FileItem
       const fileItems: FileItem[] = electronFiles
-        .filter((file: any) => file.name !== TTS_METADATA_FILE)
+        .filter(
+          (file: any) =>
+            file.name !== TTS_METADATA_FILE &&
+            !(file.isDirectory && file.name.toLowerCase() === PRESENTATION_BACKGROUNDS_DIR),
+        )
         .map((file: any) => ({
           id: file.path,
           name: file.name,
@@ -188,6 +304,7 @@ const Explorer: React.FC = () => {
       setFiles(fileItems)
       setCurrentElectronDirectoryPath(directoryPath)
       await loadTtsMetadataFromElectron(directoryPath)
+      await loadPresentationBackgroundsFromElectron(directoryPath)
       // setCurrentDirectoryPath(directoryPath)
 
       // Guardar la ruta para persistencia
@@ -276,7 +393,8 @@ const Explorer: React.FC = () => {
 
             if (permissionStatus === "granted") {
               setRootDirectoryHandle(savedDirHandle)
-              await loadDirectoryContents(savedDirHandle)
+              await loadDirectoryContents(savedDirHandle, [])
+              await loadPresentationBackgroundsFromDirectory(savedDirHandle)
               console.log("✅ Contenido del directorio cargado")
             } else {
               // No solicitar permiso automáticamente, solo mostrar que hay un directorio guardado
@@ -320,6 +438,16 @@ const Explorer: React.FC = () => {
       revokeFileUrls(files)
     }
   }, [files])
+
+  useEffect(() => {
+    return () => {
+      presentationBackgroundUrls.forEach((url) => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url)
+        }
+      })
+    }
+  }, [presentationBackgroundUrls])
 
   // Filter audio files when files change
   useEffect(() => {
@@ -445,7 +573,8 @@ const Explorer: React.FC = () => {
           const newPermission = await savedDirHandle.requestPermission({ mode: "read" })
           if (newPermission === "granted") {
             setRootDirectoryHandle(savedDirHandle)
-            await loadDirectoryContents(savedDirHandle)
+            await loadDirectoryContents(savedDirHandle, [])
+            await loadPresentationBackgroundsFromDirectory(savedDirHandle)
             console.log("✅ Directorio guardado restaurado con éxito")
 
             setDirectoryState({
@@ -463,7 +592,8 @@ const Explorer: React.FC = () => {
       if (!directoryHandle) return
 
       setRootDirectoryHandle(directoryHandle)
-      await loadDirectoryContents(directoryHandle)
+      await loadDirectoryContents(directoryHandle, [])
+      await loadPresentationBackgroundsFromDirectory(directoryHandle)
 
       // Guardar el directorio para persistencia
       await saveDirectoryHandle(directoryHandle)
@@ -479,12 +609,12 @@ const Explorer: React.FC = () => {
     }
   }
 
-  const loadDirectoryContents = async (directoryHandle: FileSystemDirectoryHandle) => {
+  const loadDirectoryContents = async (directoryHandle: FileSystemDirectoryHandle, path: string[] = directoryState.currentPath) => {
     setIsLoading(true)
     try {
       const contents = await getDirectoryContents(directoryHandle)
       revokeFileUrls(files)
-      setFiles(contents.filter((file) => file.name !== TTS_METADATA_FILE))
+      setFiles(contents.filter((file) => file.name !== TTS_METADATA_FILE && !isHiddenRootFile(file, path)))
       setCurrentDirectoryHandle(directoryHandle)
       await loadTtsMetadataFromDirectory(directoryHandle)
     } catch (error) {
@@ -511,7 +641,7 @@ const Explorer: React.FC = () => {
           historyIndex: directoryState.historyIndex + 1,
         })
 
-        await loadDirectoryContents(currentHandle)
+        await loadDirectoryContents(currentHandle, newPath)
       }
     } else if (isAudioFile(file)) {
       setCurrentAudioFile(file)
@@ -533,7 +663,7 @@ const Explorer: React.FC = () => {
         historyIndex: directoryState.historyIndex + 1,
       })
 
-      await loadDirectoryContents(currentHandle)
+      await loadDirectoryContents(currentHandle, targetPath)
     }
   }
 
@@ -551,7 +681,7 @@ const Explorer: React.FC = () => {
         currentPath: targetPath,
         historyIndex: newIndex,
       }))
-      await loadDirectoryContents(currentHandle)
+      await loadDirectoryContents(currentHandle, targetPath)
     }
   }
 
@@ -734,6 +864,11 @@ const Explorer: React.FC = () => {
     url: isElectron() ? `file://${newPath}` : file.url,
   })
 
+  const applyRenamedFileLocally = (oldPath: string, renamedFile: FileItem) => {
+    setFiles((currentFiles) => currentFiles.map((item) => (item.path === oldPath ? renamedFile : item)))
+    setCurrentAudioFile((currentFile) => (currentFile?.path === oldPath ? renamedFile : currentFile))
+  }
+
   const handleRenameAudioFile = async (file: FileItem, nextName: string): Promise<FileItem | null> => {
     const normalizedName = normalizeAudioRename(file.name, nextName)
 
@@ -759,8 +894,7 @@ const Explorer: React.FC = () => {
         await saveTtsMetadata(nextMetadata)
       }
 
-      setCurrentAudioFile(renamedFile)
-      await loadDirectoryFromElectron(currentElectronDirectoryPath, false)
+      applyRenamedFileLocally(file.path, renamedFile)
       return renamedFile
     }
 
@@ -802,8 +936,7 @@ const Explorer: React.FC = () => {
       await saveTtsMetadata(nextMetadata)
     }
 
-    await loadDirectoryContents(currentDirectoryHandle)
-    setCurrentAudioFile(renamedFile)
+    applyRenamedFileLocally(file.path, renamedFile)
     return renamedFile
   }
 
@@ -947,21 +1080,29 @@ const Explorer: React.FC = () => {
     return {
       audio: result.audio,
       fileName: createTtsBaseFileName(),
+      rateLimit: result.rateLimit,
     }
+  }
+
+  const handleFetchTtsRateLimits = async () => {
+    if (!isApiKeyConfigured()) {
+      throw new Error("No hay API key configurada. Configura tu API key en ConfiguraciÃ³n.")
+    }
+
+    return fetchGroqRateLimits()
   }
 
   const handleConfirmTts = async (audio: ArrayBuffer, fileName: string, text: string) => {
     const normalizedFileName = normalizeTtsFileName(fileName)
-    const generatedFile = await saveTtsAudioToCurrentFolder(audio, normalizedFileName)
+    await saveTtsAudioToCurrentFolder(audio, normalizedFileName)
     await saveTtsMetadata({
-      ...ttsMetadata,
+      ...ttsMetadataRef.current,
       [normalizedFileName]: {
         text,
         model: ttsModel,
         updatedAt: Date.now(),
       },
     })
-    setCurrentAudioFile(generatedFile)
 
     return normalizedFileName
   }
@@ -989,25 +1130,10 @@ const Explorer: React.FC = () => {
     <div className="flex flex-col h-screen bg-background text-text-primary">
       <div
         className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth"
-        style={{ paddingBottom: currentAudioFile ? "140px" : "0" }}
+        style={{ paddingBottom: currentAudioFile ? "94px" : "0" }}
       >
         <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <ModelSelector type="transcription" value={transcriptionModel} onChange={setTranscriptionModel} />
-            <ModelSelector type="chat" value={chatModel} onChange={setChatModel} />
-            <ModelSelector type="tts" value={ttsModel} onChange={setTtsModel} />
-          </div>
-
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-text-primary">
-              Explorador de Archivos
-              {hasOpenDirectory && (
-                <span className="text-sm text-text-tertiary ml-2">
-                  ({rootDirectoryHandle?.name || currentElectronDirectoryPath.split(/[/\\]/).pop()})
-                </span>
-              )}
-            </h1>
-
+          <div className="flex justify-end items-center">
             <div className="flex gap-3">
               <Button onClick={handleOpenDirectory} leftIcon={<FolderOpen size={18} />}>
                 {hasOpenDirectory ? "Cambiar Carpeta" : "Abrir Carpeta"}
@@ -1027,12 +1153,24 @@ const Explorer: React.FC = () => {
             </div>
           </div>
 
-          {rootDirectoryHandle && (
+          {hasOpenDirectory && (
             <Breadcrumb
               path={directoryState.currentPath}
+              rootLabel={rootDirectoryHandle?.name || currentElectronDirectoryPath.split(/[/\\]/).pop()}
               onNavigate={handleBreadcrumbClick}
               onGoBack={handleGoBack}
               canGoBack={directoryState.historyIndex > 0}
+              rightAction={
+                <button
+                  type="button"
+                  onClick={() => setIsPresentationOpen(true)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-background-tertiary hover:text-text-primary"
+                  aria-label="Modo presentación"
+                  title="Modo presentación"
+                >
+                  <Maximize2 size={18} />
+                </button>
+              }
             />
           )}
 
@@ -1072,12 +1210,26 @@ const Explorer: React.FC = () => {
 
       {currentAudioFile && (
         <AudioPlayer
+          ref={audioPlayerRef}
           audioFiles={audioFiles}
           currentFile={currentAudioFile}
           onSelectFile={setCurrentAudioFile}
           onRenameFile={handleRenameAudioFile}
+          onPlaybackStateChange={setIsAudioPlaying}
         />
       )}
+
+      <PresentationMode
+        isOpen={isPresentationOpen}
+        title={currentAudioFile?.name || rootDirectoryHandle?.name || currentElectronDirectoryPath.split(/[/\\]/).pop() || ""}
+        text={getPresentationText()}
+        isPlaying={isAudioPlaying}
+        canControlPlayback={!!currentAudioFile}
+        backgroundImages={presentationBackgroundUrls}
+        backgroundIndex={presentationBackgroundIndex}
+        onTogglePlayPause={() => audioPlayerRef.current?.togglePlayPause()}
+        onClose={() => setIsPresentationOpen(false)}
+      />
 
       <TranscriptionModal
         isOpen={isTranscriptionModalOpen}
@@ -1107,12 +1259,22 @@ const Explorer: React.FC = () => {
         onClose={() => setIsTtsModalOpen(false)}
         selectedModel={ttsModel}
         canSaveToCurrentFolder={hasOpenDirectory}
+        onFetchRateLimits={handleFetchTtsRateLimits}
         onGenerate={handleGenerateTtsPreview}
         onConfirm={handleConfirmTts}
       />
 
       {/* Modal de configuración */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        transcriptionModel={transcriptionModel}
+        chatModel={chatModel}
+        ttsModel={ttsModel}
+        onTranscriptionModelChange={setTranscriptionModel}
+        onChatModelChange={setChatModel}
+        onTtsModelChange={setTtsModel}
+      />
     </div>
   )
 }

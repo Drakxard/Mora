@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
-import { Clock } from "lucide-react"
+import { forwardRef, useImperativeHandle, useState, useRef, useEffect } from "react"
+import { Clock, FastForward, SkipForward } from "lucide-react"
 import type { FileItem } from "../../types"
 import AudioControls from "./AudioControls"
 import FileIcon from "../FileExplorer/FileIcon"
@@ -12,24 +12,49 @@ interface AudioPlayerProps {
   currentFile: FileItem | null
   onSelectFile: (file: FileItem) => void
   onRenameFile: (file: FileItem, newName: string) => Promise<FileItem | null>
+  onPlaybackStateChange?: (isPlaying: boolean) => void
 }
 
-const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSelectFile, onRenameFile }) => {
+export interface AudioPlayerHandle {
+  togglePlayPause: () => void
+}
+
+const splitFileNameExtension = (fileName: string) => {
+  const lastDotIndex = fileName.lastIndexOf(".")
+  if (lastDotIndex <= 0) {
+    return { baseName: fileName, extension: "" }
+  }
+
+  return {
+    baseName: fileName.slice(0, lastDotIndex),
+    extension: fileName.slice(lastDotIndex),
+  }
+}
+
+const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ audioFiles, currentFile, onSelectFile, onRenameFile, onPlaybackStateChange }, ref) => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
-  const [playerHeight, setPlayerHeight] = useState(124) // altura por defecto
+  const [playerHeight, setPlayerHeight] = useState(78)
   const [isResizing, setIsResizing] = useState(false)
+  const [delayEnabled, setDelayEnabled] = useState(false)
   const [delaySeconds, setDelaySeconds] = useState(2)
+  const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(false)
+  const [hasEnded, setHasEnded] = useState(false)
   const [editableName, setEditableName] = useState("")
   const [isSavingName, setIsSavingName] = useState(false)
   const [renameError, setRenameError] = useState("")
   const audioRef = useRef<HTMLAudioElement>(null)
   const resizeRef = useRef<HTMLDivElement>(null)
   const nextAudioTimerRef = useRef<number | null>(null)
+  const delayEnabledRef = useRef(delayEnabled)
+  const delaySecondsRef = useRef(delaySeconds)
+  const autoAdvanceEnabledRef = useRef(autoAdvanceEnabled)
+  const togglePlayPauseLockedRef = useRef(false)
+  const suppressNextAutoPlayRef = useRef(false)
 
-  const minHeight = 96
-  const maxHeight = 144
+  const minHeight = 64
+  const maxHeight = 104
 
   const clearNextAudioTimer = () => {
     if (nextAudioTimerRef.current) {
@@ -92,9 +117,25 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
   }, [isResizing])
 
   useEffect(() => {
-    setEditableName(currentFile?.name || "")
+    setEditableName(currentFile ? splitFileNameExtension(currentFile.name).baseName : "")
     setRenameError("")
   }, [currentFile])
+
+  useEffect(() => {
+    delayEnabledRef.current = delayEnabled
+    delaySecondsRef.current = delaySeconds
+    autoAdvanceEnabledRef.current = autoAdvanceEnabled
+  }, [delayEnabled, delaySeconds, autoAdvanceEnabled])
+
+  useEffect(() => {
+    onPlaybackStateChange?.(isPlaying)
+  }, [isPlaying, onPlaybackStateChange])
+
+  useEffect(() => {
+    if (!autoAdvanceEnabled) {
+      clearNextAudioTimer()
+    }
+  }, [autoAdvanceEnabled])
 
   useEffect(() => {
     return clearNextAudioTimer
@@ -104,10 +145,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeElement = document.activeElement
+      const activeHTMLElement = activeElement instanceof HTMLElement ? activeElement : null
       const isInputFocused =
         activeElement?.tagName === "INPUT" ||
         activeElement?.tagName === "TEXTAREA" ||
-        activeElement?.contentEditable === "true" ||
+        activeElement?.tagName === "BUTTON" ||
+        activeHTMLElement?.isContentEditable ||
         activeElement?.getAttribute("role") === "textbox"
 
       if (isInputFocused) {
@@ -128,7 +171,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
           break
         case " ":
         case "Spacebar":
-          togglePlayPause()
+          if (hasEnded && !autoAdvanceEnabledRef.current) {
+            playNext()
+          } else {
+            togglePlayPause()
+          }
           break
       }
     }
@@ -140,7 +187,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true })
     }
-  }, [currentFile, isPlaying, currentTime, duration])
+  }, [currentFile, isPlaying, currentTime, duration, hasEnded])
 
   // Update audio player state when audio loads or time updates
   useEffect(() => {
@@ -153,15 +200,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime)
+      if (audio.currentTime < audio.duration) {
+        setHasEnded(false)
+      }
     }
 
     const handleEnded = () => {
       setIsPlaying(false)
-      scheduleNext()
+      setHasEnded(true)
+      if (autoAdvanceEnabledRef.current) {
+        scheduleNext()
+      }
     }
 
     const handlePlay = () => {
       setIsPlaying(true)
+      setHasEnded(false)
     }
 
     const handlePause = () => {
@@ -189,11 +243,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
     setCurrentTime(0)
     setDuration(0)
     setIsPlaying(false)
+    setHasEnded(false)
   }, [currentFile])
 
   // Auto-play when a file is selected
   useEffect(() => {
     if (currentFile && audioRef.current) {
+      if (suppressNextAutoPlayRef.current) {
+        suppressNextAutoPlayRef.current = false
+        return
+      }
+
       audioRef.current
         .play()
         .then(() => setIsPlaying(true))
@@ -203,6 +263,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
 
   const togglePlayPause = () => {
     if (!audioRef.current) return
+    if (togglePlayPauseLockedRef.current) return
+
+    togglePlayPauseLockedRef.current = true
+    window.setTimeout(() => {
+      togglePlayPauseLockedRef.current = false
+    }, 500)
+
+    if (hasEnded && !autoAdvanceEnabledRef.current) {
+      playNext()
+      return
+    }
 
     if (isPlaying) {
       audioRef.current.pause()
@@ -262,43 +333,51 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
     nextAudioTimerRef.current = window.setTimeout(() => {
       onSelectFile(sortedAudioFiles[nextIndex])
       nextAudioTimerRef.current = null
-    }, delaySeconds * 1000)
+    }, (delayEnabledRef.current ? delaySecondsRef.current : 0) * 1000)
   }
 
   const saveEditableName = async () => {
     if (!currentFile || isSavingName) return
 
     const nextName = editableName.trim()
-    if (!nextName || nextName === currentFile.name) {
-      setEditableName(currentFile.name)
+    const currentBaseName = splitFileNameExtension(currentFile.name).baseName
+    if (!nextName || nextName === currentBaseName) {
+      setEditableName(currentBaseName)
       setRenameError("")
       return
     }
 
     setIsSavingName(true)
     setRenameError("")
+    suppressNextAutoPlayRef.current = true
 
     try {
       const renamedFile = await onRenameFile(currentFile, nextName)
-      setEditableName(renamedFile?.name || nextName)
+      setEditableName(renamedFile ? splitFileNameExtension(renamedFile.name).baseName : nextName)
     } catch (error: any) {
-      setEditableName(currentFile.name)
+      suppressNextAutoPlayRef.current = false
+      setEditableName(currentBaseName)
       setRenameError(error.message || "No se pudo renombrar.")
     } finally {
       setIsSavingName(false)
     }
   }
 
+  useImperativeHandle(ref, () => ({
+    togglePlayPause,
+  }))
+
   const handleNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault()
-      event.currentTarget.blur()
+      event.stopPropagation()
       saveEditableName()
     }
 
     if (event.key === "Escape") {
       event.preventDefault()
-      setEditableName(currentFile?.name || "")
+      event.stopPropagation()
+      setEditableName(currentFile ? splitFileNameExtension(currentFile.name).baseName : "")
       setRenameError("")
       event.currentTarget.blur()
     }
@@ -308,25 +387,24 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-background-secondary via-background-secondary to-background-secondary border-t border-background-tertiary shadow-2xl backdrop-blur-sm"
+      className="fixed bottom-0 left-0 right-0 border-t border-background-tertiary bg-background-secondary/95 shadow-lg backdrop-blur-sm"
       style={{ height: `${playerHeight}px` }}
     >
       {/* Resize handle */}
       <div
         ref={resizeRef}
-        className="absolute top-0 right-4 w-8 h-3 cursor-ns-resize opacity-20 hover:opacity-40 transition-opacity"
+        className="absolute right-4 top-0 h-3 w-8 cursor-ns-resize opacity-20 transition-opacity hover:opacity-40"
         onMouseDown={() => setIsResizing(true)}
       >
-        <div className="w-full h-0.5 bg-text-tertiary rounded-full mt-1"></div>
-        <div className="w-full h-0.5 bg-text-tertiary rounded-full mt-0.5"></div>
+        <div className="mt-1 h-0.5 w-full rounded-full bg-text-tertiary"></div>
+        <div className="mt-0.5 h-0.5 w-full rounded-full bg-text-tertiary"></div>
       </div>
 
-      <div className="flex items-center justify-center h-full px-4">
-        <div className="flex items-center w-full max-w-6xl gap-6">
-          {/* File info */}
-          <div className="flex w-64 flex-shrink-0 items-center min-w-0">
-            <div className="mr-3 p-2 bg-primary/10 rounded-lg">
-              <FileIcon file={currentFile} size={20} />
+      <div className="flex h-full items-center justify-center px-3">
+        <div className="flex w-full max-w-6xl items-center gap-3">
+          <div className="flex w-56 min-w-0 flex-shrink-0 items-center gap-2">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-background-tertiary text-primary">
+              <FileIcon file={currentFile} size={18} />
             </div>
             <div className="min-w-0">
               <input
@@ -336,19 +414,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
                   setRenameError("")
                 }}
                 onKeyDown={handleNameKeyDown}
-                onBlur={() => setEditableName((value) => value.trim() || currentFile.name)}
+                onBlur={() =>
+                  setEditableName((value) => value.trim() || splitFileNameExtension(currentFile.name).baseName)
+                }
                 disabled={isSavingName}
                 className="w-full truncate rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium text-text-primary outline-none transition-colors hover:border-background-tertiary hover:bg-background-tertiary/60 focus:border-primary/50 focus:bg-background-tertiary"
                 title="Editar nombre y presionar Enter para guardar"
               />
-              <p className="text-text-tertiary text-xs">
-                {renameError || `${sortedAudioFiles.findIndex((f) => f.path === currentFile.path) + 1} de ${sortedAudioFiles.length}`}
+              <p className="text-xs text-text-tertiary">
+                {renameError || `${sortedAudioFiles.findIndex((f) => f.path === currentFile.path) + 1}/${sortedAudioFiles.length}`}
               </p>
             </div>
           </div>
 
-          {/* Audio controls - centered */}
-          <div className="flex-1 max-w-2xl">
+          <div className="min-w-0 flex-1">
             <AudioControls
               audioRef={audioRef}
               isPlaying={isPlaying}
@@ -363,24 +442,69 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
             />
           </div>
 
-          <div className="flex w-40 flex-shrink-0 items-center gap-2 text-text-secondary">
-            <Clock size={16} />
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex items-center justify-between text-xs">
-                <span>Retraso</span>
-                <span className="font-mono">{delaySeconds}s</span>
-              </div>
+          <div className="flex w-auto flex-shrink-0 items-center gap-1 text-text-secondary">
+            <button
+              type="button"
+              onClick={() => {
+                setAutoAdvanceEnabled((enabled) => {
+                  if (enabled && delayEnabled) {
+                    setDelayEnabled(false)
+                  }
+                  return !enabled
+                })
+              }}
+              className={`inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
+                autoAdvanceEnabled
+                  ? "bg-primary/15 text-primary hover:bg-primary/25"
+                  : "text-text-secondary hover:bg-background-tertiary hover:text-text-primary"
+              }`}
+              aria-pressed={autoAdvanceEnabled}
+              title={autoAdvanceEnabled ? "Autoavance activo" : "Autoavance"}
+              aria-label="Autoavance"
+            >
+              {autoAdvanceEnabled ? <FastForward size={18} /> : <SkipForward size={18} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setDelayEnabled((enabled) => {
+                  const nextEnabled = !enabled
+                  if (nextEnabled) {
+                    setAutoAdvanceEnabled(true)
+                  }
+                  return nextEnabled
+                })
+              }}
+              className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-2 transition-colors ${
+                delayEnabled
+                  ? "bg-primary/15 text-primary hover:bg-primary/25"
+                  : "text-text-secondary hover:bg-background-tertiary hover:text-text-primary"
+              }`}
+              aria-pressed={delayEnabled}
+              title="Demora"
+              aria-label="Demora"
+            >
+              <Clock size={16} />
+              {delayEnabled && <span className="font-mono text-[11px]">{delaySeconds}s</span>}
+            </button>
+
+            {delayEnabled && (
               <input
                 type="range"
                 min="2"
                 max="15"
                 step="1"
                 value={delaySeconds}
-                onChange={(event) => setDelaySeconds(Number(event.target.value))}
-                className="w-full accent-primary"
+                onChange={(event) => {
+                  setDelaySeconds(Number(event.target.value))
+                  setAutoAdvanceEnabled(true)
+                }}
+                className="hidden w-16 accent-primary lg:block"
                 title="Segundos entre audios"
+                aria-label="Segundos entre audios"
               />
-            </div>
+            )}
           </div>
         </div>
 
@@ -388,6 +512,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioFiles, currentFile, onSe
       </div>
     </div>
   )
-}
+})
+
+AudioPlayer.displayName = "AudioPlayer"
 
 export default AudioPlayer

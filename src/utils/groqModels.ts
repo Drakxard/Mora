@@ -222,6 +222,11 @@ export function getModelCapabilities(model: GroqModel | string): {
 export const FALLBACK_MODELS = {
   transcription: [
     {
+      id: "whisper-large-v3",
+      name: "Whisper Large v3",
+      description: "Alta precisión",
+    },
+    {
       id: "whisper-large-v3-turbo",
       name: "Whisper Large v3 Turbo",
       description: "Velocidad alta, muy buena precisión",
@@ -243,6 +248,21 @@ export const FALLBACK_MODELS = {
       name: "Qwen 2.5 72B Instruct",
       description: "Excelente para español",
     },
+    {
+      id: "deepseek-r1-distill-llama-70b",
+      name: "DeepSeek R1 Distill Llama 70B",
+      description: "Modelo de razonamiento avanzado",
+    },
+    {
+      id: "gemma2-9b-it",
+      name: "Gemma 2 9B IT",
+      description: "Buen balance calidad/creatividad",
+    },
+    {
+      id: "mixtral-8x7b-32768",
+      name: "Mixtral 8x7B",
+      description: "Balance velocidad/calidad, contexto largo",
+    },
   ],
   vision: [
     {
@@ -261,6 +281,11 @@ export const FALLBACK_MODELS = {
       id: "canopylabs/orpheus-arabic-saudi",
       name: "Canopy Labs Orpheus Arabic Saudi",
       description: "Texto a voz en arabe saudita",
+    },
+    {
+      id: "canopylabs/orpheus-v1-english",
+      name: "Canopy Labs Orpheus V1 English",
+      description: "Texto a voz en ingles",
     },
   ],
 }
