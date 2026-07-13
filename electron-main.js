@@ -214,6 +214,71 @@ function setupIPC() {
     return targetPath
   })
 
+  ipcMain.handle("rename-file", async (event, dirPath, oldPath, newName) => {
+    const resolvedDirectory = path.resolve(dirPath)
+    const sourcePath = path.resolve(oldPath)
+    const targetPath = path.resolve(resolvedDirectory, newName)
+
+    if (!sourcePath.startsWith(resolvedDirectory + path.sep) || !targetPath.startsWith(resolvedDirectory + path.sep)) {
+      throw new Error("Ruta de archivo invalida.")
+    }
+
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error("El archivo original no existe.")
+    }
+
+    if (fs.existsSync(targetPath) && sourcePath !== targetPath) {
+      throw new Error("Ya existe un archivo con ese nombre.")
+    }
+
+    fs.renameSync(sourcePath, targetPath)
+    return targetPath
+  })
+
+  ipcMain.handle("delete-file", async (event, dirPath, filePath) => {
+    const resolvedDirectory = path.resolve(dirPath)
+    const targetPath = path.resolve(filePath)
+
+    if (!targetPath.startsWith(resolvedDirectory + path.sep)) {
+      throw new Error("Ruta de archivo invalida.")
+    }
+
+    if (fs.existsSync(targetPath)) {
+      fs.unlinkSync(targetPath)
+    }
+  })
+
+  ipcMain.handle("read-tts-metadata", async (event, dirPath, fileName) => {
+    const resolvedDirectory = path.resolve(dirPath)
+    const targetPath = path.resolve(resolvedDirectory, fileName)
+
+    if (!targetPath.startsWith(resolvedDirectory + path.sep)) {
+      throw new Error("Ruta de archivo invalida.")
+    }
+
+    if (!fs.existsSync(targetPath)) return null
+    return fs.readFileSync(targetPath, "utf8")
+  })
+
+  ipcMain.handle("write-tts-metadata", async (event, dirPath, fileName, contents) => {
+    const resolvedDirectory = path.resolve(dirPath)
+    const targetPath = path.resolve(resolvedDirectory, fileName)
+
+    if (!targetPath.startsWith(resolvedDirectory + path.sep)) {
+      throw new Error("Ruta de archivo invalida.")
+    }
+
+    fs.writeFileSync(targetPath, contents, "utf8")
+
+    if (process.platform === "win32") {
+      try {
+        require("child_process").execFileSync("attrib", ["+h", targetPath])
+      } catch (error) {
+        console.warn("No se pudo marcar metadata TTS como oculta:", error.message)
+      }
+    }
+  })
+
   ipcMain.handle("get-app-version", () => {
     return app.getVersion()
   })

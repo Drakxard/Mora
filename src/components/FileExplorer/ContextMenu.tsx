@@ -6,12 +6,22 @@ import { FileItem } from '../../types';
 interface ContextMenuProps {
   file: FileItem;
   onTranscribe: (file: FileItem) => void;
+  onDeleteTranscription: (file: FileItem) => void;
+  onRetryTts: (file: FileItem) => void;
+  onDeleteFile: (file: FileItem) => void;
+  hasTranscription?: boolean;
+  hasTtsMetadata?: boolean;
   className?: string;
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({ 
   file, 
   onTranscribe, 
+  onDeleteTranscription,
+  onRetryTts,
+  onDeleteFile,
+  hasTranscription = false,
+  hasTtsMetadata = false,
   className 
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -40,8 +50,24 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     onTranscribe(file);
     setIsOpen(false);
   };
+
+  const handleRetryTts = () => {
+    onRetryTts(file);
+    setIsOpen(false);
+  };
+
+  const handleDeleteTranscription = () => {
+    onDeleteTranscription(file);
+    setIsOpen(false);
+  };
+
+  const handleDeleteFile = () => {
+    onDeleteFile(file);
+    setIsOpen(false);
+  };
   
   const isAudio = file.type.startsWith('audio/');
+  const canDeleteFile = !file.isDirectory;
 
   const toggleMenu = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -53,7 +79,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 
     const rect = buttonRef.current.getBoundingClientRect();
     const menuWidth = 192;
-    const menuHeight = isAudio ? 88 : 44;
+    const menuHeight = 44 + (isAudio ? 44 : 0) + (hasTtsMetadata ? 44 : 0) + (hasTranscription ? 44 : 0) + (canDeleteFile ? 44 : 0);
     const top =
       rect.bottom + menuHeight + 8 > window.innerHeight
         ? Math.max(8, rect.top - menuHeight - 4)
@@ -89,14 +115,40 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
               Transcribir audio
             </button>
           )}
+
+          {isAudio && hasTtsMetadata && (
+            <button
+              onClick={handleRetryTts}
+              className="w-full text-left px-4 py-2 text-text-secondary hover:bg-background-tertiary transition-colors"
+            >
+              Reintentar TTS
+            </button>
+          )}
+
+          {isAudio && hasTranscription && (
+            <button
+              onClick={handleDeleteTranscription}
+              className="w-full text-left px-4 py-2 text-text-secondary hover:bg-background-tertiary transition-colors"
+            >
+              Eliminar transcripción
+            </button>
+          )}
           
-          {/* Other menu items can be added here */}
           <button
             onClick={() => setIsOpen(false)}
             className="w-full text-left px-4 py-2 text-text-secondary hover:bg-background-tertiary transition-colors"
           >
             Propiedades
           </button>
+
+          {canDeleteFile && (
+            <button
+              onClick={handleDeleteFile}
+              className="w-full text-left px-4 py-2 text-red-300 hover:bg-red-900/20 transition-colors"
+            >
+              Eliminar
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -166,12 +166,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
         ))}
       </select>
 
-      {value && <p className="text-xs text-text-tertiary mt-1">{getModelDescription(value)}</p>}
-
       {error && <p className="text-xs text-red-400 mt-1">Error: {error}</p>}
 
-      <div className="flex items-center justify-between mt-1">
-        <p className="text-xs text-text-tertiary">
+      <div className="flex items-center justify-end mt-1">
+        <p className="hidden">
           {type === "transcription"
             ? "Modelo para transcribir audio a texto."
             : type === "tts"

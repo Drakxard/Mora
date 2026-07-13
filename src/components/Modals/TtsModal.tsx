@@ -11,7 +11,7 @@ interface TtsModalProps {
   selectedModel: string
   canSaveToCurrentFolder: boolean
   onGenerate: (text: string) => Promise<{ audio: ArrayBuffer; fileName: string }>
-  onConfirm: (audio: ArrayBuffer, fileName: string) => Promise<string>
+  onConfirm: (audio: ArrayBuffer, fileName: string, text: string) => Promise<string>
 }
 
 const TtsModal: React.FC<TtsModalProps> = ({
@@ -28,19 +28,9 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const [fileName, setFileName] = useState("")
   const [error, setError] = useState("")
   const [savedFileName, setSavedFileName] = useState("")
-  const [hasRequestedAudio, setHasRequestedAudio] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    if (isOpen) {
-      setError("")
-      setSavedFileName("")
-      setHasRequestedAudio(false)
-      setTimeout(() => textAreaRef.current?.focus(), 0)
-    }
-  }, [isOpen])
 
   useEffect(() => {
     return () => {
@@ -50,11 +40,6 @@ const TtsModal: React.FC<TtsModalProps> = ({
     }
   }, [audioUrl])
 
-  const handleClose = () => {
-    if (isGenerating || isSaving) return
-    onClose()
-  }
-
   const resetPreview = () => {
     setAudio(null)
     setFileName("")
@@ -63,6 +48,26 @@ const TtsModal: React.FC<TtsModalProps> = ({
       URL.revokeObjectURL(audioUrl)
       setAudioUrl("")
     }
+  }
+
+  const resetModal = () => {
+    setText("")
+    setError("")
+    setSavedFileName("")
+    resetPreview()
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      resetModal()
+      setTimeout(() => textAreaRef.current?.focus(), 0)
+    }
+  }, [isOpen])
+
+  const handleClose = () => {
+    if (isGenerating || isSaving) return
+    resetModal()
+    onClose()
   }
 
   const handleGenerate = async () => {
@@ -83,7 +88,6 @@ const TtsModal: React.FC<TtsModalProps> = ({
     }
 
     setIsGenerating(true)
-    setHasRequestedAudio(true)
     setError("")
     resetPreview()
 
@@ -116,7 +120,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
     setSavedFileName("")
 
     try {
-      const savedName = await onConfirm(audio, fileName)
+      const savedName = await onConfirm(audio, fileName, text.trim())
       setSavedFileName(savedName)
       setText("")
       resetPreview()
@@ -130,24 +134,27 @@ const TtsModal: React.FC<TtsModalProps> = ({
 
   if (!isOpen) return null
 
+  const hasPreview = !!audioUrl
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative bg-background-secondary w-full max-w-2xl max-h-[85vh] rounded-lg shadow-xl border border-background-tertiary overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-background-tertiary">
-          <div>
-            <h2 className="text-lg font-medium text-text-primary">Generar audio TTS</h2>
-            <p className="text-xs text-text-tertiary mt-1">Modelo: {selectedModel || "No seleccionado"}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm">
+      <div className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-background-tertiary bg-background-secondary shadow-xl">
+        <div className="flex flex-shrink-0 items-start justify-between gap-4 border-b border-background-tertiary px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-text-primary">Generar audio TTS</h2>
+            <p className="mt-1 truncate text-xs text-text-tertiary">Modelo: {selectedModel || "No seleccionado"}</p>
           </div>
           <button
             onClick={handleClose}
             disabled={isGenerating || isSaving}
-            className="p-1 rounded-full hover:bg-background-tertiary transition-colors disabled:opacity-50"
+            className="rounded-md p-1 text-text-secondary transition-colors hover:bg-background-tertiary hover:text-text-primary disabled:opacity-50"
+            aria-label="Cerrar"
           >
-            <X size={20} className="text-text-secondary" />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <textarea
             ref={textAreaRef}
             value={text}
@@ -172,15 +179,21 @@ const TtsModal: React.FC<TtsModalProps> = ({
             }}
             placeholder="Texto para convertir a audio..."
             disabled={isGenerating || isSaving}
-            rows={8}
-            className="w-full bg-background-tertiary border border-background rounded-md p-3 text-text-primary placeholder-text-tertiary resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className={`w-full resize-none rounded-md border border-background bg-background-tertiary p-3 text-sm leading-6 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+              hasPreview ? "h-36" : "h-56"
+            }`}
           />
 
-          {audioUrl && (
-            <div className="bg-background-tertiary border border-background rounded-md p-3 space-y-3">
+          {hasPreview && (
+            <div className="space-y-3 rounded-md border border-background bg-background-tertiary p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-text-primary">Vista previa</span>
+                <span className="text-xs text-text-tertiary">.wav</span>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Nombre del audio</label>
-                <div className="flex items-center gap-2">
+                <label className="mb-1 block text-xs font-medium text-text-secondary">Nombre del audio</label>
+                <div className="flex items-center">
                   <input
                     value={fileName}
                     onChange={(event) => {
@@ -196,13 +209,12 @@ const TtsModal: React.FC<TtsModalProps> = ({
                       }
                     }}
                     disabled={isSaving}
-                    className="flex-1 bg-background-secondary border border-background rounded-md px-3 py-2 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="min-w-0 flex-1 rounded-md border border-background bg-background-secondary px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
-                  <span className="text-sm text-text-tertiary">.wav</span>
                 </div>
               </div>
 
-              <audio src={audioUrl} controls className="w-full" />
+              <audio src={audioUrl} controls className="block w-full" />
             </div>
           )}
 
@@ -219,12 +231,12 @@ const TtsModal: React.FC<TtsModalProps> = ({
           )}
         </div>
 
-        <div className="flex justify-between gap-3 p-4 border-t border-background-tertiary">
+        <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-t border-background-tertiary bg-background-secondary px-5 py-4">
           <Button onClick={handleClose} variant="secondary" disabled={isGenerating || isSaving}>
             Cancelar
           </Button>
-          <div className="flex gap-3">
-            {hasRequestedAudio && (
+          <div className="flex flex-wrap justify-end gap-3">
+            {audio && (
               <Button
                 onClick={handleGenerate}
                 variant="secondary"

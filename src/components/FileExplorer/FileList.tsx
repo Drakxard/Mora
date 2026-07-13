@@ -11,8 +11,11 @@ interface FileListProps {
   onChat: (file: FileItemType) => void
   onAddToChat: (file: FileItemType) => void
   onDeleteTranscription: (file: FileItemType) => void
+  onRetryTts: (file: FileItemType) => void
+  onDeleteFile: (file: FileItemType) => void
   currentPlayingFile?: FileItemType | null
   hasTranscription: (file: FileItemType) => boolean
+  hasTtsMetadata: (file: FileItemType) => boolean
   isInChat: (file: FileItemType) => boolean
 }
 
@@ -23,8 +26,11 @@ const FileList: React.FC<FileListProps> = ({
   onChat,
   onAddToChat,
   onDeleteTranscription,
+  onRetryTts,
+  onDeleteFile,
   currentPlayingFile,
   hasTranscription,
+  hasTtsMetadata,
   isInChat,
 }) => {
   if (files.length === 0) {
@@ -69,8 +75,11 @@ const FileList: React.FC<FileListProps> = ({
             onChat={onChat}
             onAddToChat={onAddToChat}
             onDeleteTranscription={onDeleteTranscription}
+            onRetryTts={onRetryTts}
+            onDeleteFile={onDeleteFile}
             isPlaying={currentPlayingFile?.path === file.path}
             hasTranscription={hasTranscription(file)}
+            hasTtsMetadata={hasTtsMetadata(file)}
             isInChat={isInChat(file)}
           />
         ))}

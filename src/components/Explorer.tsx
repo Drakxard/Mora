@@ -36,6 +36,16 @@ import SettingsModal from "./Settings/SettingsModal"
 import TtsModal from "./Modals/TtsModal"
 import { generateTtsAudio } from "../utils/tts"
 
+const TTS_METADATA_FILE = ".mora-tts.json"
+
+interface TtsMetadataEntry {
+  text: string
+  model: string
+  updatedAt: number
+}
+
+type TtsMetadata = Record<string, TtsMetadataEntry>
+
 // Función helper para diálogos de confirmación
 const showConfirmDialog = async ({ title, message, detail }: { title: string; message: string; detail: string }) => {
   // Implementación simple para navegador
@@ -63,6 +73,7 @@ const Explorer: React.FC = () => {
   // Audio and chat states
   const [currentAudioFile, setCurrentAudioFile] = useState<FileItem | null>(null)
   const [audioFiles, setAudioFiles] = useState<FileItem[]>([])
+  const [ttsMetadata, setTtsMetadata] = useState<TtsMetadata>({})
   const [transcribeFile, setTranscribeFile] = useState<FileItem | null>(null)
   const [isTranscriptionModalOpen, setIsTranscriptionModalOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -79,6 +90,59 @@ const Explorer: React.FC = () => {
   // Verificar si estamos en Electron
   const isElectron = () => {
     return !!window.electron
+  }
+
+  const parseTtsMetadata = (contents: string | null): TtsMetadata => {
+    if (!contents) return {}
+
+    try {
+      const parsed = JSON.parse(contents)
+      return parsed && typeof parsed === "object" ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+
+  const loadTtsMetadataFromElectron = async (directoryPath: string) => {
+    if (!window.electron?.readTtsMetadata) return {}
+
+    const contents = await window.electron.readTtsMetadata(directoryPath, TTS_METADATA_FILE)
+    const metadata = parseTtsMetadata(contents)
+    setTtsMetadata(metadata)
+    return metadata
+  }
+
+  const loadTtsMetadataFromDirectory = async (directoryHandle: FileSystemDirectoryHandle) => {
+    try {
+      const fileHandle = await directoryHandle.getFileHandle(TTS_METADATA_FILE)
+      const metadataFile = await fileHandle.getFile()
+      const metadata = parseTtsMetadata(await metadataFile.text())
+      setTtsMetadata(metadata)
+      return metadata
+    } catch {
+      setTtsMetadata({})
+      return {}
+    }
+  }
+
+  const saveTtsMetadata = async (nextMetadata: TtsMetadata) => {
+    const contents = JSON.stringify(nextMetadata, null, 2)
+    setTtsMetadata(nextMetadata)
+
+    if (isElectron() && window.electron?.writeTtsMetadata) {
+      if (!currentElectronDirectoryPath) return
+      await window.electron.writeTtsMetadata(currentElectronDirectoryPath, TTS_METADATA_FILE, contents)
+      return
+    }
+
+    if (!currentDirectoryHandle) return
+    const permission = await currentDirectoryHandle.requestPermission({ mode: "readwrite" })
+    if (permission !== "granted") return
+
+    const fileHandle = await currentDirectoryHandle.getFileHandle(TTS_METADATA_FILE, { create: true })
+    const writable = await fileHandle.createWritable()
+    await writable.write(contents)
+    await writable.close()
   }
 
   // Función para cargar directorio desde Electron
@@ -108,19 +172,22 @@ const Explorer: React.FC = () => {
       console.log("📁 Archivos obtenidos:", electronFiles.length)
 
       // Convertir los archivos de Electron al formato FileItem
-      const fileItems: FileItem[] = electronFiles.map((file: any) => ({
-        id: file.path,
-        name: file.name,
-        isDirectory: file.isDirectory,
-        type: file.isDirectory ? "directory" : getFileTypeFromExtension(file.name),
-        path: file.path,
-        size: file.size,
-        lastModified: file.lastModified,
-        url: file.isDirectory ? undefined : `file://${file.path}`,
-      }))
+      const fileItems: FileItem[] = electronFiles
+        .filter((file: any) => file.name !== TTS_METADATA_FILE)
+        .map((file: any) => ({
+          id: file.path,
+          name: file.name,
+          isDirectory: file.isDirectory,
+          type: file.isDirectory ? "directory" : getFileTypeFromExtension(file.name),
+          path: file.path,
+          size: file.size,
+          lastModified: file.lastModified,
+          url: file.isDirectory ? undefined : `file://${file.path}`,
+        }))
 
       setFiles(fileItems)
       setCurrentElectronDirectoryPath(directoryPath)
+      await loadTtsMetadataFromElectron(directoryPath)
       // setCurrentDirectoryPath(directoryPath)
 
       // Guardar la ruta para persistencia
@@ -417,8 +484,9 @@ const Explorer: React.FC = () => {
     try {
       const contents = await getDirectoryContents(directoryHandle)
       revokeFileUrls(files)
-      setFiles(contents)
+      setFiles(contents.filter((file) => file.name !== TTS_METADATA_FILE))
       setCurrentDirectoryHandle(directoryHandle)
+      await loadTtsMetadataFromDirectory(directoryHandle)
     } catch (error) {
       console.error("Error al cargar el contenido del directorio:", error)
     } finally {
@@ -641,6 +709,178 @@ const Explorer: React.FC = () => {
     return `${baseName || createTtsBaseFileName()}.wav`
   }
 
+  const normalizeAudioRename = (currentName: string, nextName: string) => {
+    const sanitizedName = nextName
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+      .replace(/\s+/g, " ")
+      .replace(/[. ]+$/g, "")
+
+    if (!sanitizedName) {
+      throw new Error("El nombre no puede estar vacio.")
+    }
+
+    const currentExtension = currentName.includes(".") ? currentName.slice(currentName.lastIndexOf(".")) : ""
+    const hasNewExtension = /\.[^./\\]+$/.test(sanitizedName)
+
+    return hasNewExtension || !currentExtension ? sanitizedName : `${sanitizedName}${currentExtension}`
+  }
+
+  const buildRenamedFile = (file: FileItem, newPath: string, newName: string): FileItem => ({
+    ...file,
+    id: newPath,
+    name: newName,
+    path: newPath,
+    url: isElectron() ? `file://${newPath}` : file.url,
+  })
+
+  const handleRenameAudioFile = async (file: FileItem, nextName: string): Promise<FileItem | null> => {
+    const normalizedName = normalizeAudioRename(file.name, nextName)
+
+    if (normalizedName === file.name) {
+      return file
+    }
+
+    if (files.some((item) => item.path !== file.path && item.name.toLowerCase() === normalizedName.toLowerCase())) {
+      throw new Error("Ya existe un archivo con ese nombre.")
+    }
+
+    if (isElectron() && window.electron?.renameFile) {
+      if (!currentElectronDirectoryPath) {
+        throw new Error("No hay una carpeta abierta.")
+      }
+
+      const renamedPath = await window.electron.renameFile(currentElectronDirectoryPath, file.path, normalizedName)
+      const renamedFile = buildRenamedFile(file, renamedPath, normalizedName)
+
+      if (ttsMetadata[file.name]) {
+        const nextMetadata = { ...ttsMetadata, [normalizedName]: ttsMetadata[file.name] }
+        delete nextMetadata[file.name]
+        await saveTtsMetadata(nextMetadata)
+      }
+
+      setCurrentAudioFile(renamedFile)
+      await loadDirectoryFromElectron(currentElectronDirectoryPath, false)
+      return renamedFile
+    }
+
+    if (!currentDirectoryHandle) {
+      throw new Error("No hay una carpeta abierta.")
+    }
+
+    const permission = await currentDirectoryHandle.requestPermission({ mode: "readwrite" })
+    if (permission !== "granted") {
+      throw new Error("No hay permiso de escritura para la carpeta actual.")
+    }
+
+    const oldHandle = await currentDirectoryHandle.getFileHandle(file.name)
+
+    if (oldHandle.move) {
+      await oldHandle.move(normalizedName)
+    } else {
+      const oldFile = await oldHandle.getFile()
+      const newHandle = await currentDirectoryHandle.getFileHandle(normalizedName, { create: true })
+      const writable = await newHandle.createWritable()
+      await writable.write(oldFile)
+      await writable.close()
+      await currentDirectoryHandle.removeEntry(file.name)
+    }
+
+    const renamedHandle = await currentDirectoryHandle.getFileHandle(normalizedName)
+    const renamedBrowserFile = await renamedHandle.getFile()
+    const renamedFile = {
+      ...buildRenamedFile(file, normalizedName, normalizedName),
+      type: renamedBrowserFile.type || getFileTypeFromExtension(normalizedName),
+      size: renamedBrowserFile.size,
+      lastModified: renamedBrowserFile.lastModified,
+      url: URL.createObjectURL(renamedBrowserFile),
+    }
+
+    if (ttsMetadata[file.name]) {
+      const nextMetadata = { ...ttsMetadata, [normalizedName]: ttsMetadata[file.name] }
+      delete nextMetadata[file.name]
+      await saveTtsMetadata(nextMetadata)
+    }
+
+    await loadDirectoryContents(currentDirectoryHandle)
+    setCurrentAudioFile(renamedFile)
+    return renamedFile
+  }
+
+  const handleRetryTtsAudio = async (file: FileItem) => {
+    const metadata = ttsMetadata[file.name]
+    if (!metadata) {
+      alert("No hay texto TTS guardado para este audio.")
+      return
+    }
+
+    try {
+      const result = await generateTtsAudio(metadata.text, metadata.model || ttsModel)
+      const regeneratedFile = await saveTtsAudioToCurrentFolder(result.audio, file.name)
+      await saveTtsMetadata({
+        ...ttsMetadata,
+        [file.name]: {
+          ...metadata,
+          model: metadata.model || ttsModel,
+          updatedAt: Date.now(),
+        },
+      })
+      setCurrentAudioFile(regeneratedFile)
+    } catch (error: any) {
+      alert(error.message || "No se pudo reintentar el TTS.")
+    }
+  }
+
+  const handleDeleteAudioFile = async (file: FileItem) => {
+    if (!confirm(`¿Eliminar "${file.name}"?`)) return
+
+    try {
+      if (isElectron() && window.electron?.deleteFile) {
+        if (!currentElectronDirectoryPath) {
+          throw new Error("No hay una carpeta abierta.")
+        }
+
+        await window.electron.deleteFile(currentElectronDirectoryPath, file.path)
+        if (currentAudioFile?.path === file.path) {
+          setCurrentAudioFile(null)
+        }
+
+        if (ttsMetadata[file.name]) {
+          const nextMetadata = { ...ttsMetadata }
+          delete nextMetadata[file.name]
+          await saveTtsMetadata(nextMetadata)
+        }
+
+        await loadDirectoryFromElectron(currentElectronDirectoryPath, false)
+        return
+      }
+
+      if (!currentDirectoryHandle) {
+        throw new Error("No hay una carpeta abierta.")
+      }
+
+      const permission = await currentDirectoryHandle.requestPermission({ mode: "readwrite" })
+      if (permission !== "granted") {
+        throw new Error("No hay permiso de escritura para la carpeta actual.")
+      }
+
+      await currentDirectoryHandle.removeEntry(file.name)
+      if (currentAudioFile?.path === file.path) {
+        setCurrentAudioFile(null)
+      }
+
+      if (ttsMetadata[file.name]) {
+        const nextMetadata = { ...ttsMetadata }
+        delete nextMetadata[file.name]
+        await saveTtsMetadata(nextMetadata)
+      }
+
+      await loadDirectoryContents(currentDirectoryHandle)
+    } catch (error: any) {
+      alert(error.message || "No se pudo eliminar el audio.")
+    }
+  }
+
   const saveTtsAudioToCurrentFolder = async (audio: ArrayBuffer, fileName: string): Promise<FileItem> => {
     if (isElectron() && window.electron?.saveGeneratedAudio) {
       if (!currentElectronDirectoryPath) {
@@ -710,9 +950,17 @@ const Explorer: React.FC = () => {
     }
   }
 
-  const handleConfirmTts = async (audio: ArrayBuffer, fileName: string) => {
+  const handleConfirmTts = async (audio: ArrayBuffer, fileName: string, text: string) => {
     const normalizedFileName = normalizeTtsFileName(fileName)
     const generatedFile = await saveTtsAudioToCurrentFolder(audio, normalizedFileName)
+    await saveTtsMetadata({
+      ...ttsMetadata,
+      [normalizedFileName]: {
+        text,
+        model: ttsModel,
+        updatedAt: Date.now(),
+      },
+    })
     setCurrentAudioFile(generatedFile)
 
     return normalizedFileName
@@ -803,8 +1051,11 @@ const Explorer: React.FC = () => {
                   onChat={handleChat}
                   onAddToChat={handleAddToChat}
                   onDeleteTranscription={handleDeleteTranscription}
+                  onRetryTts={handleRetryTtsAudio}
+                  onDeleteFile={handleDeleteAudioFile}
                   currentPlayingFile={currentAudioFile}
                   hasTranscription={hasTranscription}
+                  hasTtsMetadata={(file) => !!ttsMetadata[file.name]}
                   isInChat={isInChat}
                 />
               </div>
@@ -820,7 +1071,12 @@ const Explorer: React.FC = () => {
       </div>
 
       {currentAudioFile && (
-        <AudioPlayer audioFiles={audioFiles} currentFile={currentAudioFile} onSelectFile={setCurrentAudioFile} />
+        <AudioPlayer
+          audioFiles={audioFiles}
+          currentFile={currentAudioFile}
+          onSelectFile={setCurrentAudioFile}
+          onRenameFile={handleRenameAudioFile}
+        />
       )}
 
       <TranscriptionModal
