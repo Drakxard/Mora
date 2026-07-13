@@ -84,6 +84,18 @@ export function categorizeModels(models: GroqModel[]) {
     (model) => model.id.includes("whisper") || model.id.includes("distil-whisper"),
   )
 
+  const ttsModels = models.filter((model) => {
+    const id = model.id.toLowerCase()
+    if (id.includes("whisper") || id.includes("distil-whisper")) return false
+
+    return (
+      id.includes("canopylabs/orpheus") ||
+      id.includes("playai-tts") ||
+      id.includes("tts") ||
+      (model.input_modalities?.includes("text") && model.input_modalities?.includes("audio"))
+    )
+  })
+
   // Detectar modelos de visión usando input_modalities
   const visionModels = models.filter(
     (model) =>
@@ -101,6 +113,7 @@ export function categorizeModels(models: GroqModel[]) {
     (model) =>
       !model.id.includes("whisper") &&
       !model.id.includes("distil-whisper") &&
+      !ttsModels.some((tm) => tm.id === model.id) &&
       !visionModels.some((vm) => vm.id === model.id) &&
       (model.id.includes("llama") ||
         model.id.includes("mixtral") ||
@@ -115,12 +128,14 @@ export function categorizeModels(models: GroqModel[]) {
     transcription: transcriptionModels.map((m) => m.id),
     chat: chatModels.map((m) => m.id),
     vision: visionModels.map((m) => m.id),
+    tts: ttsModels.map((m) => m.id),
   })
 
   return {
     transcription: transcriptionModels,
     chat: chatModels,
     vision: visionModels,
+    tts: ttsModels,
   }
 }
 
@@ -239,6 +254,13 @@ export const FALLBACK_MODELS = {
       id: "meta-llama/llama-4-scout-17b-16e-instruct",
       name: "Llama 4 Scout 17B",
       description: "Modelo multimodal avanzado",
+    },
+  ],
+  tts: [
+    {
+      id: "canopylabs/orpheus-arabic-saudi",
+      name: "Canopy Labs Orpheus Arabic Saudi",
+      description: "Texto a voz en arabe saudita",
     },
   ],
 }

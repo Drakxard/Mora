@@ -11,7 +11,7 @@ import { supportsVision } from "../utils/groqModels"
 interface ModelSelectorProps {
   value: string
   onChange: (modelId: string) => void
-  type: "transcription" | "chat"
+  type: "transcription" | "chat" | "tts"
   className?: string
 }
 
@@ -46,6 +46,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
   const getAvailableModels = () => {
     if (type === "transcription") {
       return models.transcription
+    } else if (type === "tts") {
+      return models.tts
     } else {
       // Para chat, incluir tanto modelos de chat como de visión
       return [...models.chat, ...models.vision]
@@ -77,6 +79,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
       "deepseek-r1-distill-llama-70b": "DeepSeek R1 Distill Llama 70B",
       "meta-llama/llama-4-scout-17b-16e-instruct": "🖼️ Llama 4 Scout 17B",
       "meta-llama/llama-4-scout-70b-16e-instruct": "🖼️ Llama 4 Scout 70B",
+      "canopylabs/orpheus-arabic-saudi": "Canopy Labs Orpheus Arabic Saudi",
+      "canopylabs/orpheus-v1-english": "Canopy Labs Orpheus V1 English",
+      "playai-tts": "PlayAI TTS",
+      "playai-tts-arabic": "PlayAI TTS Arabic",
     }
 
     // Si el modelo no está en el mapa pero contiene "vision", agregar el icono
@@ -104,6 +110,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
       "deepseek-r1-distill-llama-70b": "Modelo de razonamiento avanzado",
       "meta-llama/llama-4-scout-17b-16e-instruct": "Modelo multimodal avanzado",
       "meta-llama/llama-4-scout-70b-16e-instruct": "Modelo multimodal de alta capacidad",
+      "canopylabs/orpheus-arabic-saudi": "Texto a voz en arabe saudita con voz abdullah",
+      "canopylabs/orpheus-v1-english": "Texto a voz en ingles",
+      "playai-tts": "Texto a voz",
+      "playai-tts-arabic": "Texto a voz en arabe",
     }
 
     // Si el modelo no está en el mapa pero contiene "vision", indicar que soporta visión
@@ -125,7 +135,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
     <div className={className}>
       <div className="flex items-center justify-between mb-1">
         <label htmlFor={`model-select-${type}`} className="block text-sm font-medium text-text-primary">
-          Modelo de {type === "transcription" ? "transcripción" : "chat"}:
+          Modelo de {type === "transcription" ? "transcripción" : type === "tts" ? "tts" : "chat"}:
         </label>
         <Button
           variant="ghost"
@@ -164,6 +174,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
         <p className="text-xs text-text-tertiary">
           {type === "transcription"
             ? "Modelo para transcribir audio a texto."
+            : type === "tts"
+              ? "Modelo para convertir texto a audio."
             : "Modelos con 🖼️ soportan análisis de imágenes"}
         </p>
         {models.lastUpdated && <p className="text-xs text-text-tertiary">{availableModels.length} disponibles</p>}

@@ -29,6 +29,7 @@ dist-ssr
 node_modules/
 dist/
 dist-electron/
+backup/
 
 # Sistema operativo
 .DS_Store

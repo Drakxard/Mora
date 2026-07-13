@@ -8,6 +8,10 @@ const isDev = require("electron-is-dev")
 // que la ventana se cierre automáticamente cuando el objeto JavaScript sea recogido por el recolector de basura.
 let mainWindow
 
+function getSavedPathFile() {
+  return path.join(app.getPath("userData"), "last-directory.json")
+}
+
 function createWindow() {
   // Crear la ventana del navegador.
   mainWindow = new BrowserWindow({
@@ -182,6 +186,34 @@ function setupIPC() {
   })
 
   // Manejar la obtención de la versión de la aplicación
+  ipcMain.handle("save-path", async (event, dirPath) => {
+    fs.writeFileSync(getSavedPathFile(), JSON.stringify({ path: dirPath }), "utf8")
+  })
+
+  ipcMain.handle("get-saved-path", async () => {
+    try {
+      const savedPathFile = getSavedPathFile()
+      if (!fs.existsSync(savedPathFile)) return null
+      const saved = JSON.parse(fs.readFileSync(savedPathFile, "utf8"))
+      return saved.path || null
+    } catch (error) {
+      console.error("Error leyendo ruta guardada:", error)
+      return null
+    }
+  })
+
+  ipcMain.handle("save-generated-audio", async (event, dirPath, fileName, audioBuffer) => {
+    const resolvedDirectory = path.resolve(dirPath)
+    const targetPath = path.resolve(resolvedDirectory, fileName)
+
+    if (!targetPath.startsWith(resolvedDirectory + path.sep)) {
+      throw new Error("Ruta de archivo invalida.")
+    }
+
+    fs.writeFileSync(targetPath, Buffer.from(new Uint8Array(audioBuffer)))
+    return targetPath
+  })
+
   ipcMain.handle("get-app-version", () => {
     return app.getVersion()
   })

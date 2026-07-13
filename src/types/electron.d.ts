@@ -9,6 +9,7 @@ interface ElectronAPI {
   directoryExists: (path: string) => Promise<boolean>
   savePath: (path: string) => Promise<void>
   getSavedPath: () => Promise<string | null>
+  saveGeneratedAudio: (directoryPath: string, fileName: string, audioBuffer: ArrayBuffer) => Promise<string>
 
   // Manejo de actualizaciones
   checkForUpdates: () => Promise<{ available: boolean; message?: string; error?: string }>
@@ -56,7 +57,8 @@ declare global {
   interface FileSystemDirectoryHandle {
     values(): AsyncIterableIterator<FileSystemHandle>
     queryPermission(options: { mode: string }): Promise<string>
-    requestPermission(options: { mode: string }): Promise<string>
+    requestPermission(options: { mode: "read" | "readwrite" }): Promise<PermissionState>
+    getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>
   }
 }
 

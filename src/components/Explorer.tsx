@@ -7,6 +7,7 @@ import type { FileItem, DirectoryState } from "../types"
 import {
   openDirectory,
   getDirectoryContents,
+  getFileTypeFromExtension,
   navigateToDirectory,
   isAudioFile,
   revokeFileUrls,
@@ -32,6 +33,8 @@ import Button from "./ui/Button"
 import ModelSelector from "./ModelSelector"
 import ApiKeySetupModal from "./Modals/ApiKeySetupModal"
 import SettingsModal from "./Settings/SettingsModal"
+import TtsModal from "./Modals/TtsModal"
+import { generateTtsAudio } from "../utils/tts"
 
 // Función helper para diálogos de confirmación
 const showConfirmDialog = async ({ title, message, detail }: { title: string; message: string; detail: string }) => {
@@ -43,9 +46,12 @@ const Explorer: React.FC = () => {
   // Model states
   const [transcriptionModel, setTranscriptionModel] = useState<string>("")
   const [chatModel, setChatModel] = useState<string>("")
+  const [ttsModel, setTtsModel] = useState<string>("")
 
   // Directory and navigation states
   const [rootDirectoryHandle, setRootDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null)
+  const [currentDirectoryHandle, setCurrentDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null)
+  const [currentElectronDirectoryPath, setCurrentElectronDirectoryPath] = useState<string>("")
   const [files, setFiles] = useState<FileItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [directoryState, setDirectoryState] = useState<DirectoryState>({
@@ -68,14 +74,15 @@ const Explorer: React.FC = () => {
   // Estados para modales
   const [showApiKeySetup, setShowApiKeySetup] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isTtsModalOpen, setIsTtsModalOpen] = useState(false)
 
   // Verificar si estamos en Electron
   const isElectron = () => {
-    return window && window.process && window.process.type
+    return !!window.electron
   }
 
   // Función para cargar directorio desde Electron
-  const loadDirectoryFromElectron = async (directoryPath: string) => {
+  const loadDirectoryFromElectron = async (directoryPath: string, confirmBeforeLoad = true) => {
     if (!window.electron) {
       console.error("window.electron no está disponible")
       return
@@ -85,11 +92,11 @@ const Explorer: React.FC = () => {
       console.log("🔄 Cargando directorio desde Electron:", directoryPath)
 
       // Add confirmation dialog before loading
-      const confirmLoad = await showConfirmDialog({
+      const confirmLoad = confirmBeforeLoad ? await showConfirmDialog({
         title: "Confirmar carga de directorio",
         message: `¿Confirmas cargar el directorio "${directoryPath}"?`,
         detail: "Esta acción cargará todos los archivos del directorio seleccionado.",
-      })
+      }) : true
       if (!confirmLoad) {
         console.log("⚠️ Carga del directorio cancelada por el usuario.")
         return
@@ -102,9 +109,10 @@ const Explorer: React.FC = () => {
 
       // Convertir los archivos de Electron al formato FileItem
       const fileItems: FileItem[] = electronFiles.map((file: any) => ({
+        id: file.path,
         name: file.name,
         isDirectory: file.isDirectory,
-        type: file.isDirectory ? "directory" : file.type,
+        type: file.isDirectory ? "directory" : getFileTypeFromExtension(file.name),
         path: file.path,
         size: file.size,
         lastModified: file.lastModified,
@@ -112,11 +120,14 @@ const Explorer: React.FC = () => {
       }))
 
       setFiles(fileItems)
+      setCurrentElectronDirectoryPath(directoryPath)
       // setCurrentDirectoryPath(directoryPath)
 
       // Guardar la ruta para persistencia
       saveDirectoryPathElectron(directoryPath)
-      await window.electron.savePath(directoryPath)
+      if (window.electron.savePath) {
+        await window.electron.savePath(directoryPath)
+      }
 
       console.log("💾 Ruta guardada en localStorage:", directoryPath)
     } catch (error) {
@@ -147,7 +158,7 @@ const Explorer: React.FC = () => {
         console.log("🖥️ Ejecutándose en Electron")
 
         // En Electron, intentar cargar la ruta guardada
-        const savedPath = await window.electron.getSavedPath()
+        const savedPath = await window.electron?.getSavedPath()
 
         console.log("📂 Ruta guardada encontrada:", savedPath)
 
@@ -270,6 +281,10 @@ const Explorer: React.FC = () => {
           setIsChatOpen(false)
         }
 
+        if (isTtsModalOpen) {
+          setIsTtsModalOpen(false)
+        }
+
         // Limpiar archivos transcritos del chat
         if (transcribedFiles.length > 0) {
           setTranscribedFiles([])
@@ -283,6 +298,7 @@ const Explorer: React.FC = () => {
         // Resetear modelos seleccionados
         setTranscriptionModel("")
         setChatModel("")
+        setTtsModel("")
 
         console.log("🔄 Estados dependientes de API key reseteados")
       }
@@ -295,7 +311,7 @@ const Explorer: React.FC = () => {
     const interval = setInterval(checkApiKeyStatus, 1000)
 
     return () => clearInterval(interval)
-  }, [isTranscriptionModalOpen, isChatOpen, transcribedFiles.length, savedTranscriptions.size])
+  }, [isTranscriptionModalOpen, isChatOpen, isTtsModalOpen, transcribedFiles.length, savedTranscriptions.size])
 
   // Add this effect after the other useEffect hooks
   useEffect(() => {
@@ -402,6 +418,7 @@ const Explorer: React.FC = () => {
       const contents = await getDirectoryContents(directoryHandle)
       revokeFileUrls(files)
       setFiles(contents)
+      setCurrentDirectoryHandle(directoryHandle)
     } catch (error) {
       console.error("Error al cargar el contenido del directorio:", error)
     } finally {
@@ -604,6 +621,105 @@ const Explorer: React.FC = () => {
     window.location.reload()
   }
 
+  const hasOpenDirectory = !!currentDirectoryHandle || !!currentElectronDirectoryPath
+
+  const createTtsFileName = () => {
+    const now = new Date()
+    const pad = (value: number) => value.toString().padStart(2, "0")
+    const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+    const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+    return `tts-${date}-${time}.wav`
+  }
+
+  const saveTtsAudioToCurrentFolder = async (audio: ArrayBuffer, fileName: string): Promise<FileItem> => {
+    if (isElectron() && window.electron?.saveGeneratedAudio) {
+      if (!currentElectronDirectoryPath) {
+        throw new Error("Abre una carpeta antes de generar audio.")
+      }
+
+      const savedPath = await window.electron.saveGeneratedAudio(currentElectronDirectoryPath, fileName, audio)
+      await loadDirectoryFromElectron(currentElectronDirectoryPath, false)
+      return {
+        id: savedPath,
+        name: fileName,
+        isDirectory: false,
+        type: "audio/wav",
+        path: savedPath,
+        url: `file://${savedPath}`,
+        size: audio.byteLength,
+        lastModified: Date.now(),
+      }
+    }
+
+    if (!currentDirectoryHandle) {
+      throw new Error("Abre una carpeta antes de generar audio.")
+    }
+
+    const permission = await currentDirectoryHandle.requestPermission({ mode: "readwrite" })
+    if (permission !== "granted") {
+      throw new Error("No hay permiso de escritura para la carpeta actual.")
+    }
+
+    const fileHandle = await currentDirectoryHandle.getFileHandle(fileName, { create: true })
+    const writable = await fileHandle.createWritable()
+    await writable.write(new Blob([audio], { type: "audio/wav" }))
+    await writable.close()
+    await loadDirectoryContents(currentDirectoryHandle)
+
+    const generatedFile = await fileHandle.getFile()
+    return {
+      id: fileName,
+      name: fileName,
+      isDirectory: false,
+      type: generatedFile.type || "audio/wav",
+      path: fileName,
+      url: URL.createObjectURL(generatedFile),
+      size: generatedFile.size,
+      lastModified: generatedFile.lastModified,
+    }
+  }
+
+  const handleGenerateTts = async (text: string) => {
+    if (!isApiKeyConfigured()) {
+      setShowApiKeySetup(true)
+      throw new Error("No hay API key configurada. Configura tu API key en Configuración.")
+    }
+
+    if (!ttsModel) {
+      throw new Error("Selecciona un modelo TTS primero.")
+    }
+
+    if (!hasOpenDirectory) {
+      throw new Error("Abre una carpeta antes de generar audio.")
+    }
+
+    const result = await generateTtsAudio(text, ttsModel)
+    const fileName = createTtsFileName()
+    const generatedFile = await saveTtsAudioToCurrentFolder(result.audio, fileName)
+    setCurrentAudioFile(generatedFile)
+
+    return fileName
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "*") return
+
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName?.toLowerCase()
+      const isEditableTarget =
+        tagName === "input" || tagName === "textarea" || tagName === "select" || target?.isContentEditable
+
+      if (isEditableTarget || isTtsModalOpen) return
+
+      event.preventDefault()
+      setIsTtsModalOpen(true)
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isTtsModalOpen])
+
   return (
     <div className="flex flex-col h-screen bg-background text-text-primary">
       <div
@@ -611,22 +727,25 @@ const Explorer: React.FC = () => {
         style={{ paddingBottom: currentAudioFile ? "140px" : "0" }}
       >
         <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <ModelSelector type="transcription" value={transcriptionModel} onChange={setTranscriptionModel} />
             <ModelSelector type="chat" value={chatModel} onChange={setChatModel} />
+            <ModelSelector type="tts" value={ttsModel} onChange={setTtsModel} />
           </div>
 
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-text-primary">
               Explorador de Archivos
-              {rootDirectoryHandle && (
-                <span className="text-sm text-text-tertiary ml-2">({rootDirectoryHandle.name})</span>
+              {hasOpenDirectory && (
+                <span className="text-sm text-text-tertiary ml-2">
+                  ({rootDirectoryHandle?.name || currentElectronDirectoryPath.split(/[/\\]/).pop()})
+                </span>
               )}
             </h1>
 
             <div className="flex gap-3">
               <Button onClick={handleOpenDirectory} leftIcon={<FolderOpen size={18} />}>
-                {rootDirectoryHandle ? "Cambiar Carpeta" : "Abrir Carpeta"}
+                {hasOpenDirectory ? "Cambiar Carpeta" : "Abrir Carpeta"}
               </Button>
 
               {/* Botón de configuración */}
@@ -657,7 +776,7 @@ const Explorer: React.FC = () => {
               <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
               <p className="text-text-secondary">Cargando archivos...</p>
             </div>
-          ) : rootDirectoryHandle ? (
+          ) : hasOpenDirectory ? (
             <div className="bg-background-secondary rounded-lg shadow-sm overflow-hidden">
               <div className="p-4">
                 <FileList
@@ -709,6 +828,14 @@ const Explorer: React.FC = () => {
 
       {/* Modal de configuración de API key */}
       <ApiKeySetupModal isOpen={showApiKeySetup} onComplete={handleApiKeySetupComplete} />
+
+      <TtsModal
+        isOpen={isTtsModalOpen}
+        onClose={() => setIsTtsModalOpen(false)}
+        selectedModel={ttsModel}
+        canSaveToCurrentFolder={hasOpenDirectory}
+        onGenerate={handleGenerateTts}
+      />
 
       {/* Modal de configuración */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />

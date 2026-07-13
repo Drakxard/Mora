@@ -42,6 +42,13 @@ export function useGroqModels() {
             root: m.id,
             parent: null,
           })),
+          tts: FALLBACK_MODELS.tts.map((m) => ({
+            id: m.id,
+            object: "model",
+            owned_by: "groq",
+            root: m.id,
+            parent: null,
+          })),
           isLoading: false,
           lastUpdated: Date.now(),
         })
@@ -54,6 +61,7 @@ export function useGroqModels() {
         transcription: categorized.transcription,
         chat: categorized.chat,
         vision: categorized.vision,
+        tts: categorized.tts,
         isLoading: false,
         lastUpdated: Date.now(),
       })
@@ -62,6 +70,7 @@ export function useGroqModels() {
         transcription: categorized.transcription.length,
         chat: categorized.chat.length,
         vision: categorized.vision.length,
+        tts: categorized.tts.length,
       })
     } catch (err: any) {
       console.error("Error actualizando modelos:", err)

@@ -7,6 +7,7 @@ interface AppConfig {
   selectedModels?: {
     transcription?: string
     chat?: string
+    tts?: string
   }
   userApiKey?: string // Nueva propiedad para la API key del usuario
   isFirstRun?: boolean // Nueva propiedad para detectar primer inicio
@@ -82,7 +83,9 @@ export const getAllTranscriptions = (): Record<string, string> => {
 }
 
 // Funciones para modelos seleccionados
-export const saveSelectedModel = (type: "transcription" | "chat", modelId: string): void => {
+export type StoredModelType = "transcription" | "chat" | "tts"
+
+export const saveSelectedModel = (type: StoredModelType, modelId: string): void => {
   const config = loadConfig()
   if (!config.selectedModels) {
     config.selectedModels = {}
@@ -92,7 +95,7 @@ export const saveSelectedModel = (type: "transcription" | "chat", modelId: strin
   console.log(`Modelo ${type} guardado:`, modelId)
 }
 
-export const getSelectedModel = (type: "transcription" | "chat"): string | undefined => {
+export const getSelectedModel = (type: StoredModelType): string | undefined => {
   const config = loadConfig()
   return config.selectedModels?.[type]
 }

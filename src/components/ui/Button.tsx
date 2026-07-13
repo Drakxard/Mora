@@ -5,12 +5,14 @@ import type React from "react"
 interface ButtonProps {
   children: React.ReactNode
   onClick?: () => void
-  variant?: "primary" | "secondary"
+  variant?: "primary" | "secondary" | "ghost"
   size?: "sm" | "md" | "lg"
   disabled?: boolean
   leftIcon?: React.ReactNode
   className?: string
   type?: "button" | "submit" | "reset"
+  title?: string
+  "aria-label"?: string
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -22,6 +24,8 @@ const Button: React.FC<ButtonProps> = ({
   leftIcon,
   className = "",
   type = "button",
+  title,
+  "aria-label": ariaLabel,
 }) => {
   const baseClasses =
     "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
@@ -30,6 +34,7 @@ const Button: React.FC<ButtonProps> = ({
     primary: "bg-primary text-white hover:bg-primary/90 focus:ring-primary",
     secondary:
       "bg-background-tertiary text-text-primary hover:bg-background-tertiary/80 focus:ring-background-tertiary",
+    ghost: "bg-transparent text-text-primary hover:bg-background-tertiary focus:ring-background-tertiary",
   }
 
   const sizeClasses = {
@@ -43,7 +48,7 @@ const Button: React.FC<ButtonProps> = ({
   const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabledClasses} ${className}`
 
   return (
-    <button type={type} className={classes} onClick={onClick} disabled={disabled}>
+    <button type={type} className={classes} onClick={onClick} disabled={disabled} title={title} aria-label={ariaLabel}>
       {leftIcon && <span className="mr-2">{leftIcon}</span>}
       {children}
     </button>

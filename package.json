@@ -6,7 +6,17 @@
   "author": "Drakxard <drakxard@gmail.com>",
   "main": "electron-main.js",
   "scripts": {
-      //corructos
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -b --noEmit",
+    "build:strict": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "electron-dev": "concurrently \"npm run dev\" \"electron .\"",
+    "build-web": "vite build",
+    "build-electron-dev": "electron-builder --dir",
+    "dist": "npm run build-web && dotenv -- electron-builder",
+    "clean": "node -e \"const fs=require('fs'); for (const dir of ['dist','dist-electron']) fs.rmSync(dir,{recursive:true,force:true});\""
   },
   "dependencies": {
     "@ai-sdk/groq": "1.2.9",
