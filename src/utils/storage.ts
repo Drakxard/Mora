@@ -19,6 +19,11 @@ const STORAGE_KEY = "audio-explorer-config"
 const DIRECTORY_HANDLE_KEY = "audio-explorer-directory-handle"
 const DEFAULT_PRESENTATION_TRANSITION_SECONDS = 8
 
+export const getEnvApiKey = (): string | undefined => {
+  const envApiKey = import.meta.env.VITE_GROQ_API_KEY
+  return typeof envApiKey === "string" && envApiKey.trim() ? envApiKey.trim() : undefined
+}
+
 export const loadConfig = (): AppConfig => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -241,21 +246,30 @@ export const deleteUserApiKey = (): void => {
 
 // Función helper para obtener la API key (usuario o fallback)
 export const getApiKey = (): string | undefined => {
+  const envApiKey = getEnvApiKey()
+  if (envApiKey) {
+    return envApiKey
+  }
+
   const userApiKey = getUserApiKey()
   if (userApiKey) {
     return userApiKey
   }
-  // No usar fallback - forzar al usuario a configurar su propia API key
+
   return undefined
 }
 
 // Nuevas funciones para el primer inicio
 export const isFirstRun = (): boolean => {
+  if (getEnvApiKey()) return false
+
   const config = loadConfig()
   return config.isFirstRun !== false
 }
 
 export const isApiKeyConfigured = (): boolean => {
+  if (getEnvApiKey()) return true
+
   const config = loadConfig()
   return config.apiKeyConfigured === true && !!config.userApiKey
 }

@@ -7,6 +7,7 @@ import Button from "../ui/Button"
 import UpdaterSettings from "./UpdaterSettings"
 import ModelSelector from "../ModelSelector"
 import {
+  getEnvApiKey,
   getUserApiKey,
   saveUserApiKey,
   deleteUserApiKey,
@@ -40,6 +41,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const [success, setSuccess] = useState<string>("")
+  const hasEnvApiKey = !!getEnvApiKey()
 
   if (!isOpen) return null
 
@@ -191,7 +193,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex justify-between">
                     <span className="text-text-secondary">Estado API:</span>
                     <span className={`${isApiKeyConfigured() ? "text-green-400" : "text-red-400"}`}>
-                      {isApiKeyConfigured() ? "Configurada" : "No configurada"}
+                      {hasEnvApiKey ? "Configurada desde Vercel" : isApiKeyConfigured() ? "Configurada" : "No configurada"}
                     </span>
                   </div>
                 </div>
@@ -275,19 +277,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         }}
                         placeholder="gsk_..."
                         className="w-full px-3 py-3 pr-10 bg-background-tertiary border border-background rounded-md text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                        disabled={isLoading}
+                        disabled={isLoading || hasEnvApiKey}
                       />
                       <button
                         type="button"
                         onClick={() => setShowApiKey(!showApiKey)}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-text-secondary hover:text-text-primary transition-colors"
-                        disabled={isLoading}
+                        disabled={isLoading || hasEnvApiKey}
                       >
                         {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
                     <p className="text-xs text-text-tertiary mt-1">
-                      Tu API key se guarda de forma segura en tu dispositivo y nunca se comparte.
+                      {hasEnvApiKey
+                        ? "La API key viene de Vercel. Para cambiarla, edita VITE_GROQ_API_KEY en el proyecto."
+                        : "Tu API key se guarda en este dispositivo."}
                     </p>
                   </div>
 
@@ -308,14 +312,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex gap-3">
                     <Button
                       onClick={handleSaveApiKey}
-                      disabled={!apiKey.trim() || isLoading}
+                      disabled={!apiKey.trim() || isLoading || hasEnvApiKey}
                       leftIcon={<Save size={18} />}
                       className="flex-1"
                     >
                       {isLoading ? "Verificando..." : "Guardar API Key"}
                     </Button>
 
-                    {isApiKeyConfigured() && (
+                    {!hasEnvApiKey && isApiKeyConfigured() && (
                       <Button
                         onClick={handleDeleteApiKey}
                         variant="secondary"

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { Key, Eye, EyeOff, Save, AlertCircle, ExternalLink } from "lucide-react"
+import { AlertCircle, ExternalLink, Eye, EyeOff, Key, Save } from "lucide-react"
 import Button from "../ui/Button"
 import { saveUserApiKey } from "../../utils/storage"
 
@@ -21,13 +21,12 @@ const ApiKeySetupModal: React.FC<ApiKeySetupModalProps> = ({ isOpen, onComplete 
 
   const handleSave = async () => {
     if (!apiKey.trim()) {
-      setError("Por favor ingresa una API key válida")
+      setError("Ingresa una API key valida.")
       return
     }
 
-    // Validación básica del formato de la API key de Groq
     if (!apiKey.startsWith("gsk_")) {
-      setError('La API key de Groq debe comenzar con "gsk_"')
+      setError('La API key de Groq debe comenzar con "gsk_".')
       return
     }
 
@@ -35,7 +34,6 @@ const ApiKeySetupModal: React.FC<ApiKeySetupModalProps> = ({ isOpen, onComplete 
     setError("")
 
     try {
-      // Verificar que la API key funciona haciendo una petición de prueba
       const testResponse = await fetch("https://api.groq.com/openai/v1/models", {
         headers: {
           Authorization: `Bearer ${apiKey.trim()}`,
@@ -44,10 +42,9 @@ const ApiKeySetupModal: React.FC<ApiKeySetupModalProps> = ({ isOpen, onComplete 
       })
 
       if (!testResponse.ok) {
-        throw new Error("API key inválida o sin permisos")
+        throw new Error("API key invalida o sin permisos")
       }
 
-      // Si la verificación es exitosa, guardar la API key
       saveUserApiKey(apiKey.trim())
       onComplete()
     } catch (error: any) {
@@ -63,32 +60,32 @@ const ApiKeySetupModal: React.FC<ApiKeySetupModalProps> = ({ isOpen, onComplete 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative bg-background-secondary w-full max-w-md rounded-lg shadow-xl border border-background-tertiary">
+      <div className="relative w-full max-w-md rounded-lg border border-background-tertiary bg-background-secondary shadow-xl">
         <div className="p-6">
-          <div className="flex items-center mb-6">
-            <Key size={24} className="text-primary mr-3" />
+          <div className="mb-6 flex items-center">
+            <Key size={24} className="mr-3 text-primary" />
             <div>
-              <h2 className="text-xl font-semibold text-text-primary">Configuración inicial</h2>
-              <p className="text-sm text-text-secondary">Configura tu API key de Groq para continuar</p>
+              <h2 className="text-xl font-semibold text-text-primary">Configuracion inicial</h2>
+              <p className="text-sm text-text-secondary">No se encontro una API key de Groq configurada</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
+            <div className="rounded-lg border border-blue-800 bg-blue-900/20 p-4">
               <div className="flex items-start">
-                <AlertCircle size={20} className="text-blue-400 mr-3 mt-0.5 flex-shrink-0" />
+                <AlertCircle size={20} className="mr-3 mt-0.5 flex-shrink-0 text-blue-400" />
                 <div className="text-sm">
-                  <p className="text-blue-300 font-medium mb-2">¿Por qué necesitas una API key?</p>
-                  <p className="text-blue-200 mb-3">
-                    Esta aplicación utiliza los servicios de IA de Groq para transcripción y chat. Necesitas tu propia
-                    API key para usar estas funciones.
+                  <p className="mb-2 font-medium text-blue-300">API key requerida</p>
+                  <p className="mb-3 text-blue-200">
+                    En Vercel configura <span className="font-mono">VITE_GROQ_API_KEY</span>. En local tambien puedes
+                    ingresar una API key manual para usar transcripcion, chat y TTS.
                   </p>
                   <Button
                     onClick={openGroqConsole}
                     variant="secondary"
                     size="sm"
                     leftIcon={<ExternalLink size={16} />}
-                    className="text-blue-300 border-blue-600 hover:bg-blue-800/30"
+                    className="border-blue-600 text-blue-300 hover:bg-blue-800/30"
                   >
                     Obtener API key gratuita
                   </Button>
@@ -102,32 +99,32 @@ const ApiKeySetupModal: React.FC<ApiKeySetupModalProps> = ({ isOpen, onComplete 
                 <input
                   type={showApiKey ? "text" : "password"}
                   value={apiKey}
-                  onChange={(e) => {
-                    setApiKey(e.target.value)
+                  onChange={(event) => {
+                    setApiKey(event.target.value)
                     setError("")
                   }}
                   placeholder="gsk_..."
-                  className="w-full px-3 py-3 pr-10 bg-background-tertiary border border-background rounded-md text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full rounded-md border border-background bg-background-tertiary px-3 py-3 pr-10 text-text-primary placeholder-text-tertiary focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-text-secondary hover:text-text-primary transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-secondary transition-colors hover:text-text-primary"
                   disabled={isLoading}
                 >
                   {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
               <p className="text-xs text-text-tertiary">
-                Tu API key se guardará de forma segura en tu dispositivo y nunca se compartirá.
+                Si Vercel tiene <span className="font-mono">VITE_GROQ_API_KEY</span>, este paso no aparecera.
               </p>
             </div>
 
             {error && (
-              <div className="flex items-center p-3 bg-red-900/20 border border-red-800 rounded-md">
-                <AlertCircle size={16} className="text-red-400 mr-2 flex-shrink-0" />
-                <p className="text-red-300 text-sm">{error}</p>
+              <div className="flex items-center rounded-md border border-red-800 bg-red-900/20 p-3">
+                <AlertCircle size={16} className="mr-2 flex-shrink-0 text-red-400" />
+                <p className="text-sm text-red-300">{error}</p>
               </div>
             )}
 
