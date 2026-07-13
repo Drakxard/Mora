@@ -1127,44 +1127,40 @@ const Explorer: React.FC = () => {
   }, [isTtsModalOpen])
 
   return (
-    <div className="flex flex-col h-screen bg-background text-text-primary">
+    <div className="relative flex h-screen flex-col bg-background text-text-primary">
+      <div className="absolute right-4 top-4 z-20 flex gap-3">
+        <button
+          type="button"
+          onClick={handleOpenDirectory}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary"
+          aria-label={hasOpenDirectory ? "Cambiar carpeta" : "Abrir carpeta"}
+          title={hasOpenDirectory ? "Cambiar carpeta" : "Abrir carpeta"}
+        >
+          <FolderOpen size={18} />
+        </button>
+
+        <Button
+          onClick={() => setIsSettingsOpen(true)}
+          variant="secondary"
+          leftIcon={<Settings size={18} />}
+          className="h-9 w-9 px-0 [&>span]:mr-0"
+          title="Configuración"
+          aria-label="Configuración"
+        >
+        </Button>
+
+        {isElectron() && (
+          <Button onClick={checkForUpdates} variant="secondary" size="sm">
+            Verificar actualizaciones
+          </Button>
+        )}
+      </div>
+
       <div
         className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth"
         style={{ paddingBottom: currentAudioFile ? "94px" : "0" }}
       >
         <div className="max-w-6xl mx-auto px-4 pb-6 pt-3 space-y-3">
-          <div className="flex items-center justify-end pr-0 md:-mr-1">
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleOpenDirectory}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary"
-                aria-label={hasOpenDirectory ? "Cambiar carpeta" : "Abrir carpeta"}
-                title={hasOpenDirectory ? "Cambiar carpeta" : "Abrir carpeta"}
-              >
-                <FolderOpen size={18} />
-              </button>
-
-              {/* Botón de configuración */}
-              <Button
-                onClick={() => setIsSettingsOpen(true)}
-                variant="secondary"
-                leftIcon={<Settings size={18} />}
-                className="h-9 w-9 px-0 [&>span]:mr-0"
-                title="Configuración"
-                aria-label="Configuración"
-              >
-              </Button>
-
-              {/* Botón de verificar actualizaciones (solo visible en Electron) */}
-              {isElectron() && (
-                <Button onClick={checkForUpdates} variant="secondary" size="sm">
-                  Verificar actualizaciones
-                </Button>
-              )}
-            </div>
-          </div>
-
           {hasOpenDirectory && (
             <Breadcrumb
               path={directoryState.currentPath}
