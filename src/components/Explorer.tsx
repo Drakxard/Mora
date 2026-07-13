@@ -1135,13 +1135,25 @@ const Explorer: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
           <div className="flex justify-end items-center">
             <div className="flex gap-3">
-              <Button onClick={handleOpenDirectory} leftIcon={<FolderOpen size={18} />}>
-                {hasOpenDirectory ? "Cambiar Carpeta" : "Abrir Carpeta"}
-              </Button>
+              <button
+                type="button"
+                onClick={handleOpenDirectory}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary"
+                aria-label={hasOpenDirectory ? "Cambiar carpeta" : "Abrir carpeta"}
+                title={hasOpenDirectory ? "Cambiar carpeta" : "Abrir carpeta"}
+              >
+                <FolderOpen size={18} />
+              </button>
 
               {/* Botón de configuración */}
-              <Button onClick={() => setIsSettingsOpen(true)} variant="secondary" leftIcon={<Settings size={18} />}>
-                Configuración
+              <Button
+                onClick={() => setIsSettingsOpen(true)}
+                variant="secondary"
+                leftIcon={<Settings size={18} />}
+                className="h-9 w-9 px-0 [&>span]:mr-0"
+                title="Configuración"
+                aria-label="Configuración"
+              >
               </Button>
 
               {/* Botón de verificar actualizaciones (solo visible en Electron) */}
