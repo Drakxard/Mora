@@ -5,14 +5,35 @@ import { useState } from "react"
 import { X, Key, Info, Trash2, Eye, EyeOff, Save, ExternalLink } from "lucide-react"
 import Button from "../ui/Button"
 import UpdaterSettings from "./UpdaterSettings"
-import { getUserApiKey, saveUserApiKey, deleteUserApiKey, isApiKeyConfigured } from "../../utils/storage"
+import ModelSelector from "../ModelSelector"
+import {
+  getUserApiKey,
+  saveUserApiKey,
+  deleteUserApiKey,
+  isApiKeyConfigured,
+} from "../../utils/storage"
 
 interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
+  transcriptionModel: string
+  chatModel: string
+  ttsModel: string
+  onTranscriptionModelChange: (modelId: string) => void
+  onChatModelChange: (modelId: string) => void
+  onTtsModelChange: (modelId: string) => void
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  transcriptionModel,
+  chatModel,
+  ttsModel,
+  onTranscriptionModelChange,
+  onChatModelChange,
+  onTtsModelChange,
+}) => {
   const [activeTab, setActiveTab] = useState<"general" | "api" | "updates">("general")
   const [apiKey, setApiKey] = useState(getUserApiKey() || "")
   const [showApiKey, setShowApiKey] = useState(false)
@@ -62,10 +83,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   }
 
   const handleDeleteApiKey = () => {
-    if (confirm("¿Estás seguro de que quieres eliminar tu API key? Tendrás que configurarla nuevamente.")) {
+    if (
+      confirm(
+        "¿Estás seguro de que quieres eliminar tu API key?\n\nEsto eliminará:\n- Tu API key\n- Todas las transcripciones guardadas\n- Los modelos seleccionados\n- Tendrás que configurar todo nuevamente",
+      )
+    ) {
+      // Eliminar la API key y todos los datos relacionados
       deleteUserApiKey()
+
+      // Actualizar el estado local
       setApiKey("")
-      setSuccess("API key eliminada correctamente")
+      setSuccess("API key y datos relacionados eliminados correctamente")
+
+      // Mostrar mensaje y recargar después de un breve delay
+      setTimeout(() => {
+        setSuccess("Recargando aplicación...")
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      }, 1500)
     }
   }
 
@@ -130,6 +166,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           {activeTab === "general" && (
             <div className="space-y-6">
               <div>
+                <h3 className="text-lg font-medium text-text-primary mb-4">Modelos</h3>
+                <div className="grid grid-cols-1 gap-4 bg-background-tertiary rounded-lg p-4">
+                  <ModelSelector
+                    type="transcription"
+                    value={transcriptionModel}
+                    onChange={onTranscriptionModelChange}
+                  />
+                  <ModelSelector type="chat" value={chatModel} onChange={onChatModelChange} />
+                  <ModelSelector type="tts" value={ttsModel} onChange={onTtsModelChange} />
+                </div>
+              </div>
+              <div>
                 <h3 className="text-lg font-medium text-text-primary mb-4">Información de la aplicación</h3>
                 <div className="bg-background-tertiary rounded-lg p-4 space-y-3">
                   <div className="flex justify-between">
@@ -156,6 +204,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     Audio Explorer es una aplicación para explorar, transcribir y chatear sobre archivos de audio
                     utilizando la API de Groq. Permite navegar por directorios, reproducir archivos de audio, generar
                     transcripciones automáticas y mantener conversaciones sobre el contenido.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-text-primary mb-4">Fondos</h3>
+                <div className="bg-background-tertiary rounded-lg p-4">
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <span className="text-sm text-text-secondary">Modo</span>
+                    <span className="font-mono text-sm text-text-primary">Sin transición</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="3"
+                    max="30"
+                    step="1"
+                    value={3}
+                    onChange={() => undefined}
+                    className="hidden"
+                    title="Segundos entre transiciones de presentación"
+                  />
+                  <p className="mt-2 text-xs text-text-tertiary">
+                    Cada audio usa un fondo de /fondos, sin transición automática.
                   </p>
                 </div>
               </div>

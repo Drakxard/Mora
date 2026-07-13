@@ -7,14 +7,17 @@ interface AppConfig {
   selectedModels?: {
     transcription?: string
     chat?: string
+    tts?: string
   }
   userApiKey?: string // Nueva propiedad para la API key del usuario
   isFirstRun?: boolean // Nueva propiedad para detectar primer inicio
   apiKeyConfigured?: boolean // Nueva propiedad para verificar si la API key está configurada
+  presentationTransitionSeconds?: number
 }
 
 const STORAGE_KEY = "audio-explorer-config"
 const DIRECTORY_HANDLE_KEY = "audio-explorer-directory-handle"
+const DEFAULT_PRESENTATION_TRANSITION_SECONDS = 8
 
 export const loadConfig = (): AppConfig => {
   try {
@@ -81,8 +84,22 @@ export const getAllTranscriptions = (): Record<string, string> => {
   return config.transcriptions
 }
 
+export const getPresentationTransitionSeconds = (): number => {
+  const config = loadConfig()
+  const value = config.presentationTransitionSeconds
+  return typeof value === "number" && Number.isFinite(value) ? value : DEFAULT_PRESENTATION_TRANSITION_SECONDS
+}
+
+export const savePresentationTransitionSeconds = (seconds: number): void => {
+  const config = loadConfig()
+  config.presentationTransitionSeconds = Math.max(3, Math.min(30, Math.round(seconds)))
+  saveConfig(config)
+}
+
 // Funciones para modelos seleccionados
-export const saveSelectedModel = (type: "transcription" | "chat", modelId: string): void => {
+export type StoredModelType = "transcription" | "chat" | "tts"
+
+export const saveSelectedModel = (type: StoredModelType, modelId: string): void => {
   const config = loadConfig()
   if (!config.selectedModels) {
     config.selectedModels = {}
@@ -92,7 +109,7 @@ export const saveSelectedModel = (type: "transcription" | "chat", modelId: strin
   console.log(`Modelo ${type} guardado:`, modelId)
 }
 
-export const getSelectedModel = (type: "transcription" | "chat"): string | undefined => {
+export const getSelectedModel = (type: StoredModelType): string | undefined => {
   const config = loadConfig()
   return config.selectedModels?.[type]
 }

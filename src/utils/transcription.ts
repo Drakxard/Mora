@@ -1,4 +1,5 @@
 import type { TranscriptionResponse } from "../types"
+import { getApiKey } from "./storage"
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB limit for Groq API
 
@@ -12,10 +13,11 @@ export const transcribeAudio = async (
     console.log("[transcribeAudio] Tipo:", audioFile.type)
     console.log("[transcribeAudio] Modelo:", model)
 
-    // Verificar API key
-    if (!import.meta.env.VITE_GROQ_API_KEY) {
+    // ✅ Verificar API key del usuario
+    const apiKey = getApiKey()
+    if (!apiKey) {
       throw new Error(
-        "API key de Groq no encontrada. Asegúrate de que VITE_GROQ_API_KEY esté configurada en tu archivo .env",
+        "API key de Groq no encontrada. Por favor configura tu API key en la configuración de la aplicación.",
       )
     }
 
@@ -41,7 +43,7 @@ export const transcribeAudio = async (
     const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`, // ✅ USA LA API KEY DEL USUARIO
       },
       body: formData,
     })
@@ -59,7 +61,7 @@ export const transcribeAudio = async (
           errorMessage =
             "El servicio de transcripción está temporalmente no disponible. Intenta nuevamente en unos minutos."
         } else if (response.status === 401) {
-          errorMessage = "API key inválida. Verifica tu configuración de VITE_GROQ_API_KEY."
+          errorMessage = "API key inválida. Verifica tu configuración en los ajustes de la aplicación."
         } else if (response.status === 429) {
           errorMessage = "Has excedido el límite de solicitudes. Espera un momento antes de intentar nuevamente."
         } else if (response.status === 400) {

@@ -11,7 +11,7 @@ import { supportsVision } from "../utils/groqModels"
 interface ModelSelectorProps {
   value: string
   onChange: (modelId: string) => void
-  type: "transcription" | "chat"
+  type: "transcription" | "chat" | "tts"
   className?: string
 }
 
@@ -46,6 +46,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
   const getAvailableModels = () => {
     if (type === "transcription") {
       return models.transcription
+    } else if (type === "tts") {
+      return models.tts
     } else {
       // Para chat, incluir tanto modelos de chat como de visión
       return [...models.chat, ...models.vision]
@@ -63,6 +65,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
   // Función para obtener el nombre amigable del modelo
   const getModelDisplayName = (modelId: string) => {
     const nameMap: Record<string, string> = {
+      "whisper-large-v3": "Whisper Large v3",
       "whisper-large-v3-turbo": "Whisper Large v3 Turbo",
       "distil-whisper-large-v3-en": "Distil Whisper Large v3 EN",
       "llama-3.1-8b-instant": "Llama 3.1 8B Instant",
@@ -77,6 +80,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
       "deepseek-r1-distill-llama-70b": "DeepSeek R1 Distill Llama 70B",
       "meta-llama/llama-4-scout-17b-16e-instruct": "🖼️ Llama 4 Scout 17B",
       "meta-llama/llama-4-scout-70b-16e-instruct": "🖼️ Llama 4 Scout 70B",
+      "canopylabs/orpheus-arabic-saudi": "Canopy Labs Orpheus Arabic Saudi",
+      "canopylabs/orpheus-v1-english": "Canopy Labs Orpheus V1 English",
+      "playai-tts": "PlayAI TTS",
+      "playai-tts-arabic": "PlayAI TTS Arabic",
     }
 
     // Si el modelo no está en el mapa pero contiene "vision", agregar el icono
@@ -104,6 +111,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
       "deepseek-r1-distill-llama-70b": "Modelo de razonamiento avanzado",
       "meta-llama/llama-4-scout-17b-16e-instruct": "Modelo multimodal avanzado",
       "meta-llama/llama-4-scout-70b-16e-instruct": "Modelo multimodal de alta capacidad",
+      "canopylabs/orpheus-arabic-saudi": "Texto a voz en arabe saudita con voz abdullah",
+      "canopylabs/orpheus-v1-english": "Texto a voz en ingles",
+      "playai-tts": "Texto a voz",
+      "playai-tts-arabic": "Texto a voz en arabe",
     }
 
     // Si el modelo no está en el mapa pero contiene "vision", indicar que soporta visión
@@ -121,11 +132,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
     return baseDesc
   }
 
+  const modelTypeLabel = type === "transcription" ? "transcripción" : type === "tts" ? "tts" : "chat"
+
   return (
     <div className={className}>
       <div className="flex items-center justify-between mb-1">
         <label htmlFor={`model-select-${type}`} className="block text-sm font-medium text-text-primary">
-          Modelo de {type === "transcription" ? "transcripción" : "chat"}:
+          Modelo de {modelTypeLabel}:
         </label>
         <Button
           variant="ghost"
@@ -150,20 +163,20 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ value, onChange, type, cl
           {models.isLoading ? "Cargando modelos..." : "— Selecciona un modelo —"}
         </option>
         {availableModels.map((model) => (
-          <option key={model.id} value={model.id}>
+          <option key={model.id} value={model.id} title={getModelDescription(model.id)}>
             {getModelDisplayName(model.id)}
           </option>
         ))}
       </select>
 
-      {value && <p className="text-xs text-text-tertiary mt-1">{getModelDescription(value)}</p>}
-
       {error && <p className="text-xs text-red-400 mt-1">Error: {error}</p>}
 
-      <div className="flex items-center justify-between mt-1">
-        <p className="text-xs text-text-tertiary">
+      <div className="flex items-center justify-end mt-1">
+        <p className="hidden">
           {type === "transcription"
             ? "Modelo para transcribir audio a texto."
+            : type === "tts"
+              ? "Modelo para convertir texto a audio."
             : "Modelos con 🖼️ soportan análisis de imágenes"}
         </p>
         {models.lastUpdated && <p className="text-xs text-text-tertiary">{availableModels.length} disponibles</p>}

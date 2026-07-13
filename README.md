@@ -1,17 +1,14 @@
 # Mora
-Navega entre los conceptos, transcribelos -> respuestas contextualizadas
-
-![Animation](https://github.com/user-attachments/assets/a5e6b6ee-603a-4e3a-83fd-75e5580301c0)
+Aprende a enseñarte
 
 
-Usando api de groq (Modelos LLM y Audio)
-## [Descarga (Windows)](https://mega.nz/file/C092FSaI#DBb8Mr8N-FQuXelMfSbRk6dGmeFr6dpP4favNnNadJY)
+
+## [Descarga (Windows)](https://mega.nz/file/SwkH0C4T#oNDHvLaAGh9zmBYxw2d5YGDaWiM6eSwLMDSMfftjBoo)
 path: 
 >Mora---Audio-Explorer-Setup-0.1.0.exe
 
 sha512: 
->UTfCBon9VZ3bCIOWCJrNtw3gHVjigPhscszNZikqFuQipHWwQeMtPTfOtXDiC2tsPFTCbXnbzLMB4vPCLVqpnQ==
+>z8SWLOO5X5OOmsHdbdlD6j3aiO5YWduxdf91SRfpAntC2uI6+Q/2IVYWVvk/8o17v9H6c6JI9PYNKQdUCE39Ew==
 
 releaseDate: 
->'2025-06-17T15:45:18.561Z'
-
+>'2025-06-10T01:12:04.324Z'

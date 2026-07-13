@@ -15,8 +15,11 @@ interface FileItemProps {
   onChat: (file: FileItemType) => void
   onAddToChat: (file: FileItemType) => void
   onDeleteTranscription: (file: FileItemType) => void
+  onRetryTts: (file: FileItemType) => void
+  onDeleteFile: (file: FileItemType) => void
   isPlaying?: boolean
   hasTranscription?: boolean
+  hasTtsMetadata?: boolean
   isInChat?: boolean
 }
 
@@ -27,8 +30,11 @@ const FileItem: React.FC<FileItemProps> = ({
   onChat,
   onAddToChat,
   onDeleteTranscription,
+  onRetryTts,
+  onDeleteFile,
   isPlaying = false,
   hasTranscription = false,
+  hasTtsMetadata = false,
   isInChat = false,
 }) => {
   const handleClick = (e: React.MouseEvent) => {
@@ -131,7 +137,10 @@ const FileItem: React.FC<FileItemProps> = ({
         file={file}
         onTranscribe={onTranscribe}
         onDeleteTranscription={onDeleteTranscription}
+        onRetryTts={onRetryTts}
+        onDeleteFile={onDeleteFile}
         hasTranscription={hasTranscription}
+        hasTtsMetadata={hasTtsMetadata}
         className="opacity-0 group-hover:opacity-100 transition-opacity"
       />
     </div>

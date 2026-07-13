@@ -2,11 +2,12 @@
 
 import type React from "react"
 import { useEffect, useState } from "react"
-import { X, RefreshCw } from "lucide-react"
+import { X, RefreshCw, CheckCircle } from "lucide-react"
 import type { FileItem, TranscriptionResponse } from "../../types"
 import { transcribeAudio } from "../../utils/transcription"
 import Button from "../ui/Button"
 import { formatFileSize } from "../../utils/format"
+import { getApiKey, isApiKeyConfigured } from "../../utils/storage" // ✅ IMPORTAR funciones de storage
 
 interface TranscriptionModalProps {
   isOpen: boolean
@@ -28,15 +29,18 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
   const [transcription, setTranscription] = useState<string>("")
   const [error, setError] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
+  const [usingExisting, setUsingExisting] = useState(false)
 
   useEffect(() => {
     if (isOpen && file) {
       if (existingTranscription) {
         // Si ya hay una transcripción, mostrarla
         setTranscription(existingTranscription)
+        setUsingExisting(true)
         setError("")
       } else {
         // Si no hay transcripción, generar una nueva
+        setUsingExisting(false)
         handleTranscribe()
       }
     }
@@ -55,16 +59,19 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
 
     setIsLoading(true)
     setError("")
-    setTranscription("")
+    setUsingExisting(false)
 
     try {
       console.log("Iniciando transcripción para:", file.name)
       console.log("URL del archivo:", file.url)
       console.log("Modelo seleccionado:", selectedModel)
 
-      // Verificar que la API key esté configurada
-      if (!import.meta.env.VITE_GROQ_API_KEY) {
-        throw new Error("VITE_GROQ_API_KEY no está configurada en las variables de entorno.")
+      // ✅ Verificar que la API key del usuario esté configurada
+      const apiKey = getApiKey()
+      if (!apiKey) {
+        throw new Error(
+          "API key de Groq no encontrada. Por favor configura tu API key en los ajustes de la aplicación.",
+        )
       }
 
       // Fetch the file as a blob
@@ -131,8 +138,11 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
               <p className="text-text-tertiary text-sm mt-1">Modelo: {selectedModel || "No seleccionado"}</p>
               <p className="text-text-tertiary text-sm mt-1">Tipo: {file.type}</p>
               <p className="text-text-tertiary text-sm mt-1">URL disponible: {file.url ? "Sí" : "No"}</p>
-              {existingTranscription && (
-                <p className="text-green-400 text-sm mt-1">✓ Transcripción guardada disponible</p>
+              {usingExisting && (
+                <div className="flex items-center mt-2 text-green-400 text-sm">
+                  <CheckCircle size={16} className="mr-2" />
+                  <span>Usando transcripción guardada</span>
+                </div>
               )}
             </div>
           )}
@@ -152,7 +162,7 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
                 <details className="mt-2">
                   <summary className="text-red-400 text-sm cursor-pointer">Información de depuración</summary>
                   <div className="text-red-300 text-xs mt-2">
-                    <p>API Key configurada: {import.meta.env.VITE_GROQ_API_KEY ? "Sí" : "No"}</p>
+                    <p>API Key configurada: {isApiKeyConfigured() ? "Sí" : "No"}</p> {/* ✅ USA isApiKeyConfigured() */}
                     <p>Archivo: {file?.name}</p>
                     <p>Tipo: {file?.type}</p>
                     <p>URL: {file?.url ? "Disponible" : "No disponible"}</p>
@@ -174,7 +184,7 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
           <div>
             {(transcription || error) && !isLoading && (
               <Button onClick={handleRegenerate} variant="secondary" leftIcon={<RefreshCw size={16} />}>
-                {error ? "Reintentar" : "Regenerar"}
+                {error ? "Reintentar" : usingExisting ? "Retranscribir" : "Regenerar"}
               </Button>
             )}
           </div>

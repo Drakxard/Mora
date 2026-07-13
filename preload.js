@@ -18,6 +18,15 @@ contextBridge.exposeInMainWorld("electron", {
 
   // Verificar si el directorio existe
   directoryExists: (path) => ipcRenderer.invoke("directory-exists", path),
+  savePath: (path) => ipcRenderer.invoke("save-path", path),
+  getSavedPath: () => ipcRenderer.invoke("get-saved-path"),
+  saveGeneratedAudio: (directoryPath, fileName, audioBuffer) =>
+    ipcRenderer.invoke("save-generated-audio", directoryPath, fileName, audioBuffer),
+  renameFile: (directoryPath, oldPath, newName) => ipcRenderer.invoke("rename-file", directoryPath, oldPath, newName),
+  deleteFile: (directoryPath, filePath) => ipcRenderer.invoke("delete-file", directoryPath, filePath),
+  readTtsMetadata: (directoryPath, fileName) => ipcRenderer.invoke("read-tts-metadata", directoryPath, fileName),
+  writeTtsMetadata: (directoryPath, fileName, contents) =>
+    ipcRenderer.invoke("write-tts-metadata", directoryPath, fileName, contents),
 
   // Eventos
   onSelectDirectory: (callback) => {

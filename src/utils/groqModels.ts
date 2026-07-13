@@ -1,4 +1,5 @@
 // utils/groqModels.ts
+import { getApiKey } from "./storage"
 
 export interface GroqModel {
   id: string
@@ -21,14 +22,17 @@ export interface GroqModelsResponse {
 
 export async function fetchGroqModels(): Promise<GroqModel[]> {
   try {
-    if (!import.meta.env.VITE_GROQ_API_KEY) {
-      console.warn("VITE_GROQ_API_KEY no está configurada")
+    // ✅ Usar la API key del usuario dinámicamente
+    const apiKey = getApiKey()
+
+    if (!apiKey) {
+      console.warn("No hay API key configurada del usuario")
       return []
     }
 
     const res = await fetch("https://api.groq.com/openai/v1/models", {
       headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`, // ✅ USA LA API KEY DEL USUARIO
         "Content-Type": "application/json",
       },
     })
@@ -46,7 +50,7 @@ export async function fetchGroqModels(): Promise<GroqModel[]> {
         try {
           const detailRes = await fetch(`https://api.groq.com/openai/v1/models/${model.id}`, {
             headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+              Authorization: `Bearer ${apiKey}`, // ✅ USA LA API KEY DEL USUARIO
               "Content-Type": "application/json",
             },
           })
@@ -80,6 +84,18 @@ export function categorizeModels(models: GroqModel[]) {
     (model) => model.id.includes("whisper") || model.id.includes("distil-whisper"),
   )
 
+  const ttsModels = models.filter((model) => {
+    const id = model.id.toLowerCase()
+    if (id.includes("whisper") || id.includes("distil-whisper")) return false
+
+    return (
+      id.includes("canopylabs/orpheus") ||
+      id.includes("playai-tts") ||
+      id.includes("tts") ||
+      (model.input_modalities?.includes("text") && model.input_modalities?.includes("audio"))
+    )
+  })
+
   // Detectar modelos de visión usando input_modalities
   const visionModels = models.filter(
     (model) =>
@@ -97,6 +113,7 @@ export function categorizeModels(models: GroqModel[]) {
     (model) =>
       !model.id.includes("whisper") &&
       !model.id.includes("distil-whisper") &&
+      !ttsModels.some((tm) => tm.id === model.id) &&
       !visionModels.some((vm) => vm.id === model.id) &&
       (model.id.includes("llama") ||
         model.id.includes("mixtral") ||
@@ -111,12 +128,14 @@ export function categorizeModels(models: GroqModel[]) {
     transcription: transcriptionModels.map((m) => m.id),
     chat: chatModels.map((m) => m.id),
     vision: visionModels.map((m) => m.id),
+    tts: ttsModels.map((m) => m.id),
   })
 
   return {
     transcription: transcriptionModels,
     chat: chatModels,
     vision: visionModels,
+    tts: ttsModels,
   }
 }
 
@@ -203,6 +222,11 @@ export function getModelCapabilities(model: GroqModel | string): {
 export const FALLBACK_MODELS = {
   transcription: [
     {
+      id: "whisper-large-v3",
+      name: "Whisper Large v3",
+      description: "Alta precisión",
+    },
+    {
       id: "whisper-large-v3-turbo",
       name: "Whisper Large v3 Turbo",
       description: "Velocidad alta, muy buena precisión",
@@ -224,6 +248,21 @@ export const FALLBACK_MODELS = {
       name: "Qwen 2.5 72B Instruct",
       description: "Excelente para español",
     },
+    {
+      id: "deepseek-r1-distill-llama-70b",
+      name: "DeepSeek R1 Distill Llama 70B",
+      description: "Modelo de razonamiento avanzado",
+    },
+    {
+      id: "gemma2-9b-it",
+      name: "Gemma 2 9B IT",
+      description: "Buen balance calidad/creatividad",
+    },
+    {
+      id: "mixtral-8x7b-32768",
+      name: "Mixtral 8x7B",
+      description: "Balance velocidad/calidad, contexto largo",
+    },
   ],
   vision: [
     {
@@ -235,6 +274,18 @@ export const FALLBACK_MODELS = {
       id: "meta-llama/llama-4-scout-17b-16e-instruct",
       name: "Llama 4 Scout 17B",
       description: "Modelo multimodal avanzado",
+    },
+  ],
+  tts: [
+    {
+      id: "canopylabs/orpheus-arabic-saudi",
+      name: "Canopy Labs Orpheus Arabic Saudi",
+      description: "Texto a voz en arabe saudita",
+    },
+    {
+      id: "canopylabs/orpheus-v1-english",
+      name: "Canopy Labs Orpheus V1 English",
+      description: "Texto a voz en ingles",
     },
   ],
 }
