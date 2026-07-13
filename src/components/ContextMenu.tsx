@@ -21,6 +21,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   className,
 }) => {
   const [isOpen, setIsOpen] = React.useState(false)
+  const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 })
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
@@ -53,14 +54,32 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 
   const isAudio = file.type.startsWith("audio/")
 
+  const toggleMenu = (event: React.MouseEvent) => {
+    event.stopPropagation()
+
+    if (!buttonRef.current) {
+      setIsOpen((open) => !open)
+      return
+    }
+
+    const rect = buttonRef.current.getBoundingClientRect()
+    const menuWidth = 192
+    const menuHeight = isAudio ? (hasTranscription ? 132 : 88) : 44
+    const top =
+      rect.bottom + menuHeight + 8 > window.innerHeight
+        ? Math.max(8, rect.top - menuHeight - 4)
+        : rect.bottom + 4
+    const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8)
+
+    setMenuPosition({ top, left })
+    setIsOpen((open) => !open)
+  }
+
   return (
     <div className={cn("relative", className)}>
       <button
         ref={buttonRef}
-        onClick={(e) => {
-          e.stopPropagation()
-          setIsOpen(!isOpen)
-        }}
+        onClick={toggleMenu}
         className="p-1 rounded-full hover:bg-background-tertiary transition-colors"
         aria-label="Opciones"
       >
@@ -70,7 +89,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       {isOpen && (
         <div
           ref={menuRef}
-          className="absolute right-0 mt-1 py-1 w-48 bg-background-secondary rounded-md shadow-lg z-10 border border-background-tertiary"
+          style={{ top: menuPosition.top, left: menuPosition.left }}
+          className="fixed py-1 w-48 bg-background-secondary rounded-md shadow-xl z-[1000] border border-background-tertiary"
         >
           {isAudio && (
             <>
