@@ -6,16 +6,16 @@
   "author": "Drakxard <drakxard@gmail.com>",
   "main": "electron-main.js",
   "scripts": {
-  "dev": "vite",
-  "build": "tsc -b && vite build",
-  "lint": "eslint .",
-  "preview": "vite preview",
-  "electron-dev": "concurrently \"npm run dev\" \"electron .\"",
-  "build-web": "vite build",
-  "build-electron-dev": "electron-builder --dir",
-  "dist": "npm run build-web && dotenv -- electron-builder",
-  "clean": "rimraf dist dist-electron"
-   },
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron-dev": "concurrently \"npm run dev\" \"electron .\"",
+    "build-web": "vite build",
+    "build-electron-dev": "electron-builder --dir",
+    "dist": "npm run build-web && dotenv -- electron-builder",
+    "clean": "rimraf dist dist-electron"
+  },
   "dependencies": {
     "@ai-sdk/groq": "1.2.9",
     "@nanostores/react": "^0.7.3",
@@ -24,11 +24,13 @@
     "electron-is-dev": "^2.0.0",
     "electron-log": "^5.1.1",
     "electron-updater": "^6.2.1",
+    "gpt4all": "^4.0.0",
     "lucide-react": "^0.460.0",
     "nanostores": "^0.11.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "wget": "^0.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

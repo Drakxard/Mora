@@ -39,3 +39,4 @@ dist-electron/
 
 
 certs/*.pfx
+models
