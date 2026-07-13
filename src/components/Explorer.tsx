@@ -1132,8 +1132,8 @@ const Explorer: React.FC = () => {
         className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth"
         style={{ paddingBottom: currentAudioFile ? "94px" : "0" }}
       >
-        <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-          <div className="flex justify-end items-center">
+        <div className="max-w-6xl mx-auto px-4 pb-6 pt-3 space-y-3">
+          <div className="flex items-center justify-end pr-0 md:-mr-1">
             <div className="flex gap-3">
               <button
                 type="button"
