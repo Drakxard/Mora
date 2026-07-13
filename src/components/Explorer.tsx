@@ -623,12 +623,22 @@ const Explorer: React.FC = () => {
 
   const hasOpenDirectory = !!currentDirectoryHandle || !!currentElectronDirectoryPath
 
-  const createTtsFileName = () => {
+  const createTtsBaseFileName = () => {
     const now = new Date()
     const pad = (value: number) => value.toString().padStart(2, "0")
     const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
     const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-    return `tts-${date}-${time}.wav`
+    return `tts-${date}-${time}`
+  }
+
+  const normalizeTtsFileName = (fileName: string) => {
+    const baseName = fileName
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+      .replace(/\s+/g, " ")
+      .replace(/[. ]+$/g, "")
+
+    return `${baseName || createTtsBaseFileName()}.wav`
   }
 
   const saveTtsAudioToCurrentFolder = async (audio: ArrayBuffer, fileName: string): Promise<FileItem> => {
@@ -679,7 +689,7 @@ const Explorer: React.FC = () => {
     }
   }
 
-  const handleGenerateTts = async (text: string) => {
+  const handleGenerateTtsPreview = async (text: string) => {
     if (!isApiKeyConfigured()) {
       setShowApiKeySetup(true)
       throw new Error("No hay API key configurada. Configura tu API key en Configuración.")
@@ -694,11 +704,18 @@ const Explorer: React.FC = () => {
     }
 
     const result = await generateTtsAudio(text, ttsModel)
-    const fileName = createTtsFileName()
-    const generatedFile = await saveTtsAudioToCurrentFolder(result.audio, fileName)
+    return {
+      audio: result.audio,
+      fileName: createTtsBaseFileName(),
+    }
+  }
+
+  const handleConfirmTts = async (audio: ArrayBuffer, fileName: string) => {
+    const normalizedFileName = normalizeTtsFileName(fileName)
+    const generatedFile = await saveTtsAudioToCurrentFolder(audio, normalizedFileName)
     setCurrentAudioFile(generatedFile)
 
-    return fileName
+    return normalizedFileName
   }
 
   useEffect(() => {
@@ -834,7 +851,8 @@ const Explorer: React.FC = () => {
         onClose={() => setIsTtsModalOpen(false)}
         selectedModel={ttsModel}
         canSaveToCurrentFolder={hasOpenDirectory}
-        onGenerate={handleGenerateTts}
+        onGenerate={handleGenerateTtsPreview}
+        onConfirm={handleConfirmTts}
       />
 
       {/* Modal de configuración */}
