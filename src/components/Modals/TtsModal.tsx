@@ -31,6 +31,11 @@ interface QueueItem {
   error?: string
 }
 
+interface ParsedTtsSegment {
+  text: string
+  targetFileName?: string
+}
+
 const DEFAULT_DELAY_SECONDS = 7
 const DEFAULT_GENERATION_SECONDS = 4
 const REQUESTS_PER_MINUTE_LIMIT = 10
@@ -39,14 +44,28 @@ const TOKENS_PER_MINUTE_LIMIT = 1200
 const TOKENS_PER_DAY_LIMIT = 3600
 const APPROX_CHARS_PER_TOKEN = 4
 
+const extractTrailingTitle = (value: string): ParsedTtsSegment | null => {
+  const titleMatch = value.match(/\s*\{([^{}]*)\}\s*$/)
+  const rawText = titleMatch ? value.slice(0, titleMatch.index).trim() : value.trim()
+
+  if (!rawText) return null
+
+  const targetFileName = titleMatch?.[1]?.trim()
+  return {
+    text: rawText,
+    targetFileName: targetFileName || undefined,
+  }
+}
+
 const parseTtsSegments = (value: string) => {
-  const segments: string[] = []
+  const segments: ParsedTtsSegment[] = []
   let current: string[] = []
 
   const flushCurrent = () => {
     const segment = current.join(" ").replace(/\s+/g, " ").trim()
-    if (segment) {
-      segments.push(segment)
+    const parsedSegment = segment ? extractTrailingTitle(segment) : null
+    if (parsedSegment) {
+      segments.push(parsedSegment)
     }
     current = []
   }
@@ -105,11 +124,11 @@ const ensureWavExtension = (value: string) => {
   return trimmedValue.toLowerCase().endsWith(".wav") ? trimmedValue : `${trimmedValue}.wav`
 }
 
-const estimateTokens = (segments: string[]) =>
-  segments.reduce((total, segment) => total + Math.ceil(segment.length / APPROX_CHARS_PER_TOKEN), 0)
+const estimateTokens = (segments: ParsedTtsSegment[]) =>
+  segments.reduce((total, segment) => total + Math.ceil(segment.text.length / APPROX_CHARS_PER_TOKEN), 0)
 
-const estimateMaxTokensPerMinute = (segments: string[], secondsBetweenStarts: number) => {
-  const tokenCounts = segments.map((segment) => Math.ceil(segment.length / APPROX_CHARS_PER_TOKEN))
+const estimateMaxTokensPerMinute = (segments: ParsedTtsSegment[], secondsBetweenStarts: number) => {
+  const tokenCounts = segments.map((segment) => Math.ceil(segment.text.length / APPROX_CHARS_PER_TOKEN))
   let maxTokens = 0
 
   tokenCounts.forEach((_, startIndex) => {
@@ -404,7 +423,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
     return false
   }
 
-  const validateBeforeProcessing = (segments: string[]) => {
+  const validateBeforeProcessing = (segments: unknown[]) => {
     if (segments.length === 0) {
       setError("Ingresa texto para generar el audio.")
       return false
@@ -432,12 +451,12 @@ const TtsModal: React.FC<TtsModalProps> = ({
     if (!validateBeforeProcessing(segments)) return
 
     const initialItems = segments.map((segment, index) => ({
-      id: `${index}-${segment.slice(0, 16)}`,
-      text: segment,
+      id: `${index}-${segment.text.slice(0, 16)}`,
+      text: segment.text,
       status: "pending" as QueueItemStatus,
       fileName: "",
-      targetFileName: "",
-      draftText: segment,
+      targetFileName: stripWavExtension(segment.targetFileName || ""),
+      draftText: segment.text,
     }))
 
     replaceQueueItems(initialItems)
@@ -497,7 +516,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
           updateQueueItem(item.id, {
             status: "done",
             fileName: "",
-            targetFileName: nextFileName,
+            targetFileName: item.targetFileName || nextFileName,
             audioBuffer: result.audio,
             audioUrl: nextAudioUrl,
             draftText: item.text,
@@ -804,9 +823,10 @@ const TtsModal: React.FC<TtsModalProps> = ({
     ? queueItems
     : segments.map((segment, index) => ({
         id: `preview-${index}`,
-        text: segment,
+        text: segment.text,
         status: "pending",
         fileName: "",
+        targetFileName: stripWavExtension(segment.targetFileName || ""),
       }))
   const selectedQueueItem = queueItems.find((item) => item.id === selectedItemId) || null
   const selectedAudioUrl = selectedQueueItem?.audioUrl || ""
@@ -1090,7 +1110,9 @@ const TtsModal: React.FC<TtsModalProps> = ({
                             event.currentTarget.blur()
                           }
                         }}
-                        disabled={isProcessing || isConfirming || !!item.fileName || item.status === "generating"}
+                        disabled={
+                          !isRealQueueItem || isProcessing || isConfirming || !!item.fileName || item.status === "generating"
+                        }
                         className="w-full truncate rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-text-tertiary outline-none transition-colors hover:border-background-tertiary hover:bg-background-tertiary/60 focus:border-primary/50 focus:bg-background-tertiary focus:text-text-primary disabled:cursor-default disabled:opacity-80"
                         title={item.fileName ? "Audio guardado" : "Editar nombre y confirmar para guardar"}
                       />

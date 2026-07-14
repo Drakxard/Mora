@@ -850,6 +850,7 @@ const Explorer: React.FC = () => {
       .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
       .replace(/\s+/g, " ")
       .replace(/[. ]+$/g, "")
+      .replace(/\.wav$/i, "")
 
     return `${baseName || createTtsBaseFileName()}.wav`
   }
