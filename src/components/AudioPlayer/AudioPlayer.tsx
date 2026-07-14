@@ -13,10 +13,17 @@ interface AudioPlayerProps {
   onSelectFile: (file: FileItem) => void
   onRenameFile: (file: FileItem, newName: string) => Promise<FileItem | null>
   onPlaybackStateChange?: (isPlaying: boolean) => void
+  disableKeyboardShortcuts?: boolean
+}
+
+interface AudioNavigationOptions {
+  autoPlay?: boolean
 }
 
 export interface AudioPlayerHandle {
   togglePlayPause: () => void
+  playNext: (options?: AudioNavigationOptions) => void
+  playPrevious: (options?: AudioNavigationOptions) => void
 }
 
 const splitFileNameExtension = (fileName: string) => {
@@ -31,7 +38,7 @@ const splitFileNameExtension = (fileName: string) => {
   }
 }
 
-const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ audioFiles, currentFile, onSelectFile, onRenameFile, onPlaybackStateChange }, ref) => {
+const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ audioFiles, currentFile, onSelectFile, onRenameFile, onPlaybackStateChange, disableKeyboardShortcuts = false }, ref) => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -180,14 +187,14 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ audioFile
       }
     }
 
-    if (currentFile) {
+    if (currentFile && !disableKeyboardShortcuts) {
       document.addEventListener("keydown", handleKeyDown, { capture: true })
     }
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true })
     }
-  }, [currentFile, isPlaying, currentTime, duration, hasEnded])
+  }, [currentFile, isPlaying, currentTime, duration, hasEnded, disableKeyboardShortcuts])
 
   // Update audio player state when audio loads or time updates
   useEffect(() => {
@@ -305,19 +312,29 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ audioFile
     }
   }
 
-  const playNext = () => {
+  const prepareNavigation = (options?: AudioNavigationOptions) => {
+    if (options?.autoPlay === false) {
+      audioRef.current?.pause()
+      setIsPlaying(false)
+      suppressNextAutoPlayRef.current = true
+    }
+  }
+
+  const playNext = (options?: AudioNavigationOptions) => {
     if (!currentFile || sortedAudioFiles.length <= 1) return
 
     clearNextAudioTimer()
+    prepareNavigation(options)
     const currentIndex = sortedAudioFiles.findIndex((file) => file.path === currentFile.path)
     const nextIndex = (currentIndex + 1) % sortedAudioFiles.length
     onSelectFile(sortedAudioFiles[nextIndex])
   }
 
-  const playPrevious = () => {
+  const playPrevious = (options?: AudioNavigationOptions) => {
     if (!currentFile || sortedAudioFiles.length <= 1) return
 
     clearNextAudioTimer()
+    prepareNavigation(options)
     const currentIndex = sortedAudioFiles.findIndex((file) => file.path === currentFile.path)
     const prevIndex = (currentIndex - 1 + sortedAudioFiles.length) % sortedAudioFiles.length
     onSelectFile(sortedAudioFiles[prevIndex])
@@ -365,6 +382,8 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ audioFile
 
   useImperativeHandle(ref, () => ({
     togglePlayPause,
+    playNext,
+    playPrevious,
   }))
 
   const handleNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

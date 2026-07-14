@@ -1434,6 +1434,7 @@ const Explorer: React.FC = () => {
           onSelectFile={setCurrentAudioFile}
           onRenameFile={handleRenameFile}
           onPlaybackStateChange={setIsAudioPlaying}
+          disableKeyboardShortcuts={isPresentationOpen}
         />
       )}
 
@@ -1446,6 +1447,8 @@ const Explorer: React.FC = () => {
         backgroundImages={presentationBackgroundUrls}
         backgroundIndex={presentationBackgroundIndex}
         onTogglePlayPause={() => audioPlayerRef.current?.togglePlayPause()}
+        onPreviousAudio={() => audioPlayerRef.current?.playPrevious({ autoPlay: false })}
+        onNextAudio={() => audioPlayerRef.current?.playNext({ autoPlay: false })}
         onClose={() => setIsPresentationOpen(false)}
       />
 

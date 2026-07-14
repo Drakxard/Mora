@@ -13,6 +13,8 @@ interface PresentationModeProps {
   backgroundImages?: string[]
   backgroundIndex?: number
   onTogglePlayPause: () => void
+  onPreviousAudio?: () => void
+  onNextAudio?: () => void
   onClose: () => void
 }
 
@@ -27,6 +29,8 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
   backgroundImages = [],
   backgroundIndex = 0,
   onTogglePlayPause,
+  onPreviousAudio,
+  onNextAudio,
   onClose,
 }) => {
   const normalizedBackgroundIndex = backgroundImages.length
@@ -63,13 +67,28 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault()
+        event.stopPropagation()
         onClose()
+        return
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault()
+        event.stopPropagation()
+        onPreviousAudio?.()
+        return
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault()
+        event.stopPropagation()
+        onNextAudio?.()
       }
     }
 
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, onClose])
+    document.addEventListener("keydown", handleKeyDown, { capture: true })
+    return () => document.removeEventListener("keydown", handleKeyDown, { capture: true })
+  }, [isOpen, onClose, onNextAudio, onPreviousAudio])
 
   useEffect(() => {
     if (!isOpen || !targetBackground || backgroundImages.length <= 1) {
