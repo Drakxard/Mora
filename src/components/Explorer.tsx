@@ -921,7 +921,7 @@ const Explorer: React.FC = () => {
       }
 
       setIsCreatingFolder(false)
-      await loadDirectoryFromElectron(currentElectronDirectoryPath, false)
+      setFiles((currentFiles) => [...currentFiles, createdFolder])
       return createdFolder
     }
 
@@ -945,7 +945,7 @@ const Explorer: React.FC = () => {
     }
 
     setIsCreatingFolder(false)
-    await loadDirectoryContents(currentDirectoryHandle)
+    setFiles((currentFiles) => [...currentFiles, createdFolder])
     return createdFolder
   }
 
@@ -1260,14 +1260,35 @@ const Explorer: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "*" && event.key !== "+") return
+      if (event.key !== "*" && event.key !== "+" && event.key !== "Backspace") return
 
       const target = event.target as HTMLElement | null
       const tagName = target?.tagName?.toLowerCase()
       const isEditableTarget =
         tagName === "input" || tagName === "textarea" || tagName === "select" || target?.isContentEditable
+      const hasBlockingModal =
+        isTtsModalOpen || isSettingsOpen || isChatOpen || isTranscriptionModalOpen || isPresentationOpen
 
-      if (isEditableTarget || isTtsModalOpen) return
+      if (isEditableTarget || hasBlockingModal) return
+
+      if (event.key === "Backspace") {
+        if (isElectron() && currentElectronDirectoryPath) {
+          const normalizedPath = currentElectronDirectoryPath.replace(/[\\/]+$/, "")
+          const parentPath = normalizedPath.replace(/[\\/][^\\/]+$/, "").replace(/^([A-Za-z]:)$/, "$1\\")
+
+          if (parentPath && parentPath !== normalizedPath) {
+            event.preventDefault()
+            loadDirectoryFromElectron(parentPath, false)
+          }
+          return
+        }
+
+        if (directoryState.historyIndex > 0) {
+          event.preventDefault()
+          handleGoBack()
+        }
+        return
+      }
 
       event.preventDefault()
 
@@ -1283,7 +1304,16 @@ const Explorer: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [hasOpenDirectory, isTtsModalOpen])
+  }, [
+    currentElectronDirectoryPath,
+    directoryState.historyIndex,
+    hasOpenDirectory,
+    isChatOpen,
+    isPresentationOpen,
+    isSettingsOpen,
+    isTranscriptionModalOpen,
+    isTtsModalOpen,
+  ])
 
   return (
     <div className="relative flex h-screen flex-col bg-background text-text-primary">
