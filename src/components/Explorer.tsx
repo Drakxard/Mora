@@ -38,6 +38,7 @@ import PresentationMode from "./PresentationMode"
 import { fetchGroqRateLimits, generateTtsAudio } from "../utils/tts"
 
 const TTS_METADATA_FILE = ".mora-tts.json"
+const APP_CONFIG_FILE = ".mora-config.json"
 const PRESENTATION_BACKGROUNDS_DIR = "fondos"
 const PRESENTATION_BACKGROUND_EXTENSIONS = new Set(["jpg", "jpeg"])
 
@@ -56,6 +57,10 @@ interface TtsMetadataEntry {
 }
 
 type TtsMetadata = Record<string, TtsMetadataEntry>
+
+interface FolderViewConfig {
+  currentPath?: string[]
+}
 
 // Función helper para diálogos de confirmación
 const showConfirmDialog = async ({ title, message, detail }: { title: string; message: string; detail: string }) => {
@@ -127,7 +132,9 @@ const Explorer: React.FC = () => {
   }
 
   const filterVisibleFiles = (nextFiles: FileItem[]) => {
-    return nextFiles.filter((file) => file.name !== TTS_METADATA_FILE && !isPresentationBackgroundsDirectory(file))
+    return nextFiles.filter(
+      (file) => file.name !== TTS_METADATA_FILE && file.name !== APP_CONFIG_FILE && !isPresentationBackgroundsDirectory(file),
+    )
   }
 
   const replacePresentationBackgrounds = (urls: string[]) => {
@@ -229,6 +236,79 @@ const Explorer: React.FC = () => {
     }
   }
 
+  const parseFolderViewConfig = (contents: string | null): FolderViewConfig => {
+    if (!contents) return {}
+
+    try {
+      const parsed = JSON.parse(contents)
+      if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.currentPath)) return {}
+
+      const currentPath = parsed.currentPath.filter(
+        (segment: unknown): segment is string =>
+          typeof segment === "string" && !!segment.trim() && !/[\\/]/.test(segment),
+      )
+      return { currentPath }
+    } catch {
+      return {}
+    }
+  }
+
+  const readFolderViewConfigFromDirectory = async (
+    directoryHandle: FileSystemDirectoryHandle,
+  ): Promise<FolderViewConfig> => {
+    try {
+      const fileHandle = await directoryHandle.getFileHandle(APP_CONFIG_FILE)
+      const configFile = await fileHandle.getFile()
+      return parseFolderViewConfig(await configFile.text())
+    } catch {
+      return {}
+    }
+  }
+
+  const saveFolderViewConfigToDirectory = async (
+    directoryHandle: FileSystemDirectoryHandle,
+    config: FolderViewConfig,
+  ) => {
+    try {
+      const permission = await directoryHandle.requestPermission({ mode: "readwrite" })
+      if (permission !== "granted") return
+
+      const fileHandle = await directoryHandle.getFileHandle(APP_CONFIG_FILE, { create: true })
+      const writable = await fileHandle.createWritable()
+      await writable.write(JSON.stringify(config, null, 2))
+      await writable.close()
+    } catch (error) {
+      console.error("Error guardando configuracion de carpeta:", error)
+    }
+  }
+
+  const saveCurrentFolderViewPath = async (currentPath: string[]) => {
+    if (!rootDirectoryHandle) return
+    await saveFolderViewConfigToDirectory(rootDirectoryHandle, { currentPath })
+  }
+
+  const restoreDirectoryView = async (directoryHandle: FileSystemDirectoryHandle) => {
+    const config = await readFolderViewConfigFromDirectory(directoryHandle)
+    const savedPath = config.currentPath || []
+    const { currentHandle, success } = await navigateToDirectory(directoryHandle, savedPath)
+    const restoredPath = success ? savedPath : []
+    const restoredHandle = success ? currentHandle : directoryHandle
+    const history = restoredPath.length ? [[], restoredPath] : [[]]
+
+    setRootDirectoryHandle(directoryHandle)
+    setDirectoryState({
+      currentPath: restoredPath,
+      history,
+      historyIndex: history.length - 1,
+    })
+    await loadDirectoryContents(restoredHandle, restoredPath)
+    await loadPresentationBackgroundsFromDirectory(directoryHandle)
+
+    if (!success && savedPath.length) {
+      await saveFolderViewConfigToDirectory(directoryHandle, { currentPath: [] })
+    }
+  }
+
   const loadTtsMetadataFromElectron = async (directoryPath: string) => {
     if (!window.electron?.readTtsMetadata) return {}
 
@@ -303,6 +383,7 @@ const Explorer: React.FC = () => {
         .filter(
           (file: any) =>
             file.name !== TTS_METADATA_FILE &&
+            file.name !== APP_CONFIG_FILE &&
             !(file.isDirectory && file.name.toLowerCase() === PRESENTATION_BACKGROUNDS_DIR),
         )
         .map((file: any) => ({
@@ -407,9 +488,7 @@ const Explorer: React.FC = () => {
             const permissionStatus = await savedDirHandle.queryPermission({ mode: "read" })
 
             if (permissionStatus === "granted") {
-              setRootDirectoryHandle(savedDirHandle)
-              await loadDirectoryContents(savedDirHandle, [])
-              await loadPresentationBackgroundsFromDirectory(savedDirHandle)
+              await restoreDirectoryView(savedDirHandle)
               console.log("✅ Contenido del directorio cargado")
             } else {
               // No solicitar permiso automáticamente, solo mostrar que hay un directorio guardado
@@ -583,20 +662,19 @@ const Explorer: React.FC = () => {
       if (savedDirHandle) {
         const permissionStatus = await savedDirHandle.queryPermission({ mode: "read" })
 
+        if (permissionStatus === "granted") {
+          await restoreDirectoryView(savedDirHandle)
+          console.log("âœ… Directorio guardado restaurado con Ã©xito")
+          return
+        }
+
         if (permissionStatus === "prompt") {
           // Intentar restaurar el directorio guardado primero
           const newPermission = await savedDirHandle.requestPermission({ mode: "read" })
           if (newPermission === "granted") {
-            setRootDirectoryHandle(savedDirHandle)
-            await loadDirectoryContents(savedDirHandle, [])
-            await loadPresentationBackgroundsFromDirectory(savedDirHandle)
+            await restoreDirectoryView(savedDirHandle)
             console.log("✅ Directorio guardado restaurado con éxito")
 
-            setDirectoryState({
-              currentPath: [],
-              history: [[]],
-              historyIndex: 0,
-            })
             return
           }
         }
@@ -606,19 +684,11 @@ const Explorer: React.FC = () => {
       const directoryHandle = await openDirectory()
       if (!directoryHandle) return
 
-      setRootDirectoryHandle(directoryHandle)
-      await loadDirectoryContents(directoryHandle, [])
-      await loadPresentationBackgroundsFromDirectory(directoryHandle)
-
       // Guardar el directorio para persistencia
       await saveDirectoryHandle(directoryHandle)
+      await saveFolderViewConfigToDirectory(directoryHandle, { currentPath: [] })
+      await restoreDirectoryView(directoryHandle)
       console.log("Directorio guardado:", directoryHandle.name)
-
-      setDirectoryState({
-        currentPath: [],
-        history: [[]],
-        historyIndex: 0,
-      })
     } catch (error) {
       console.error("Error al abrir directorio:", error)
     }
@@ -657,6 +727,7 @@ const Explorer: React.FC = () => {
         })
 
         await loadDirectoryContents(currentHandle, newPath)
+        await saveCurrentFolderViewPath(newPath)
       }
     } else if (isAudioFile(file)) {
       setCurrentAudioFile(file)
@@ -679,6 +750,7 @@ const Explorer: React.FC = () => {
       })
 
       await loadDirectoryContents(currentHandle, targetPath)
+      await saveCurrentFolderViewPath(targetPath)
     }
   }
 
@@ -697,6 +769,7 @@ const Explorer: React.FC = () => {
         historyIndex: newIndex,
       }))
       await loadDirectoryContents(currentHandle, targetPath)
+      await saveCurrentFolderViewPath(targetPath)
     }
   }
 
