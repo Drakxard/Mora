@@ -64,7 +64,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 
     const rect = buttonRef.current.getBoundingClientRect()
     const menuWidth = 192
-    const menuHeight = isAudio ? (hasTranscription ? 132 : 88) : 44
+    const menuHeight = isAudio ? (hasTranscription ? 88 : 44) : 0
     const top =
       rect.bottom + menuHeight + 8 > window.innerHeight
         ? Math.max(8, rect.top - menuHeight - 4)
@@ -115,13 +115,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             </>
           )}
 
-          {/* Other menu items can be added here */}
-          <button
-            onClick={() => setIsOpen(false)}
-            className="w-full text-left px-4 py-2 text-text-secondary hover:bg-background-tertiary transition-colors"
-          >
-            Propiedades
-          </button>
         </div>
       )}
     </div>

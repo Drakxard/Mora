@@ -23,7 +23,10 @@ contextBridge.exposeInMainWorld("electron", {
   saveGeneratedAudio: (directoryPath, fileName, audioBuffer) =>
     ipcRenderer.invoke("save-generated-audio", directoryPath, fileName, audioBuffer),
   renameFile: (directoryPath, oldPath, newName) => ipcRenderer.invoke("rename-file", directoryPath, oldPath, newName),
+  createDirectory: (directoryPath, directoryName) =>
+    ipcRenderer.invoke("create-directory", directoryPath, directoryName),
   deleteFile: (directoryPath, filePath) => ipcRenderer.invoke("delete-file", directoryPath, filePath),
+  deleteDirectory: (directoryPath, targetPath) => ipcRenderer.invoke("delete-directory", directoryPath, targetPath),
   readTtsMetadata: (directoryPath, fileName) => ipcRenderer.invoke("read-tts-metadata", directoryPath, fileName),
   writeTtsMetadata: (directoryPath, fileName, contents) =>
     ipcRenderer.invoke("write-tts-metadata", directoryPath, fileName, contents),

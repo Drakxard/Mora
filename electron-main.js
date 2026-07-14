@@ -235,6 +235,22 @@ function setupIPC() {
     return targetPath
   })
 
+  ipcMain.handle("create-directory", async (event, dirPath, directoryName) => {
+    const resolvedDirectory = path.resolve(dirPath)
+    const targetPath = path.resolve(resolvedDirectory, directoryName)
+
+    if (!targetPath.startsWith(resolvedDirectory + path.sep)) {
+      throw new Error("Ruta de directorio invalida.")
+    }
+
+    if (fs.existsSync(targetPath)) {
+      throw new Error("Ya existe un archivo o carpeta con ese nombre.")
+    }
+
+    fs.mkdirSync(targetPath)
+    return targetPath
+  })
+
   ipcMain.handle("delete-file", async (event, dirPath, filePath) => {
     const resolvedDirectory = path.resolve(dirPath)
     const targetPath = path.resolve(filePath)
@@ -245,6 +261,19 @@ function setupIPC() {
 
     if (fs.existsSync(targetPath)) {
       fs.unlinkSync(targetPath)
+    }
+  })
+
+  ipcMain.handle("delete-directory", async (event, dirPath, directoryPath) => {
+    const resolvedDirectory = path.resolve(dirPath)
+    const targetPath = path.resolve(directoryPath)
+
+    if (!targetPath.startsWith(resolvedDirectory + path.sep)) {
+      throw new Error("Ruta de directorio invalida.")
+    }
+
+    if (fs.existsSync(targetPath)) {
+      fs.rmSync(targetPath, { recursive: true, force: false })
     }
   })
 

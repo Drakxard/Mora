@@ -12,7 +12,10 @@ interface FileListProps {
   onAddToChat: (file: FileItemType) => void
   onDeleteTranscription: (file: FileItemType) => void
   onRetryTts: (file: FileItemType) => void
+  onRenameFile: (file: FileItemType, nextName: string) => Promise<FileItemType | null>
   onDeleteFile: (file: FileItemType) => void
+  onCancelCreateFolder: () => void
+  isCreatingFolder?: boolean
   currentPlayingFile?: FileItemType | null
   hasTranscription: (file: FileItemType) => boolean
   hasTtsMetadata: (file: FileItemType) => boolean
@@ -27,13 +30,24 @@ const FileList: React.FC<FileListProps> = ({
   onAddToChat,
   onDeleteTranscription,
   onRetryTts,
+  onRenameFile,
   onDeleteFile,
+  onCancelCreateFolder,
+  isCreatingFolder = false,
   currentPlayingFile,
   hasTranscription,
   hasTtsMetadata,
   isInChat,
 }) => {
-  if (files.length === 0) {
+  const newFolderItem: FileItemType = {
+    id: "__new-folder__",
+    name: "Nueva carpeta",
+    isDirectory: true,
+    type: "directory",
+    path: "__new-folder__",
+  }
+
+  if (files.length === 0 && !isCreatingFolder) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-text-tertiary">
         <p>No hay archivos en esta carpeta</p>
@@ -43,6 +57,25 @@ const FileList: React.FC<FileListProps> = ({
 
   return (
     <div className="space-y-1">
+      {isCreatingFolder && (
+        <FileItem
+          file={newFolderItem}
+          onClick={onFileClick}
+          onTranscribe={onTranscribe}
+          onChat={onChat}
+          onAddToChat={onAddToChat}
+          onDeleteTranscription={onDeleteTranscription}
+          onRetryTts={onRetryTts}
+          onRenameFile={onRenameFile}
+          onDeleteFile={onDeleteFile}
+          onCancelCreate={onCancelCreateFolder}
+          isCreating
+          hasTranscription={false}
+          hasTtsMetadata={false}
+          isInChat={false}
+        />
+      )}
+
       {[...files]
         .sort((a, b) => {
           // Extraer números del nombre del archivo
@@ -76,6 +109,7 @@ const FileList: React.FC<FileListProps> = ({
             onAddToChat={onAddToChat}
             onDeleteTranscription={onDeleteTranscription}
             onRetryTts={onRetryTts}
+            onRenameFile={onRenameFile}
             onDeleteFile={onDeleteFile}
             isPlaying={currentPlayingFile?.path === file.path}
             hasTranscription={hasTranscription(file)}

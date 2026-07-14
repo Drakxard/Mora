@@ -11,7 +11,9 @@ interface ElectronAPI {
   getSavedPath: () => Promise<string | null>
   saveGeneratedAudio: (directoryPath: string, fileName: string, audioBuffer: ArrayBuffer) => Promise<string>
   renameFile: (directoryPath: string, oldPath: string, newName: string) => Promise<string>
+  createDirectory: (directoryPath: string, directoryName: string) => Promise<string>
   deleteFile: (directoryPath: string, filePath: string) => Promise<void>
+  deleteDirectory: (directoryPath: string, targetPath: string) => Promise<void>
   readTtsMetadata: (directoryPath: string, fileName: string) => Promise<string | null>
   writeTtsMetadata: (directoryPath: string, fileName: string, contents: string) => Promise<void>
 
@@ -63,7 +65,8 @@ declare global {
     queryPermission(options: { mode: string }): Promise<string>
     requestPermission(options: { mode: "read" | "readwrite" }): Promise<PermissionState>
     getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>
-    removeEntry(name: string): Promise<void>
+    getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FileSystemDirectoryHandle>
+    removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>
   }
 
   interface FileSystemFileHandle {

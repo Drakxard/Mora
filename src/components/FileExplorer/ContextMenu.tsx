@@ -8,6 +8,7 @@ interface ContextMenuProps {
   onTranscribe: (file: FileItem) => void;
   onDeleteTranscription: (file: FileItem) => void;
   onRetryTts: (file: FileItem) => void;
+  onRenameFile: (file: FileItem) => void;
   onDeleteFile: (file: FileItem) => void;
   hasTranscription?: boolean;
   hasTtsMetadata?: boolean;
@@ -19,6 +20,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   onTranscribe, 
   onDeleteTranscription,
   onRetryTts,
+  onRenameFile,
   onDeleteFile,
   hasTranscription = false,
   hasTtsMetadata = false,
@@ -61,13 +63,17 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     setIsOpen(false);
   };
 
+  const handleRenameFile = () => {
+    onRenameFile(file);
+    setIsOpen(false);
+  };
+
   const handleDeleteFile = () => {
     onDeleteFile(file);
     setIsOpen(false);
   };
   
   const isAudio = file.type.startsWith('audio/');
-  const canDeleteFile = !file.isDirectory;
 
   const toggleMenu = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -79,7 +85,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 
     const rect = buttonRef.current.getBoundingClientRect();
     const menuWidth = 192;
-    const menuHeight = 44 + (isAudio ? 44 : 0) + (hasTtsMetadata ? 44 : 0) + (hasTranscription ? 44 : 0) + (canDeleteFile ? 44 : 0);
+    const menuHeight = 44 + 44 + (isAudio ? 44 : 0) + (hasTtsMetadata ? 44 : 0) + (hasTranscription ? 44 : 0);
     const top =
       rect.bottom + menuHeight + 8 > window.innerHeight
         ? Math.max(8, rect.top - menuHeight - 4)
@@ -135,20 +141,18 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
           )}
           
           <button
-            onClick={() => setIsOpen(false)}
+            onClick={handleRenameFile}
             className="w-full text-left px-4 py-2 text-text-secondary hover:bg-background-tertiary transition-colors"
           >
-            Propiedades
+            Renombrar
           </button>
 
-          {canDeleteFile && (
-            <button
-              onClick={handleDeleteFile}
-              className="w-full text-left px-4 py-2 text-red-300 hover:bg-red-900/20 transition-colors"
-            >
-              Eliminar
-            </button>
-          )}
+          <button
+            onClick={handleDeleteFile}
+            className="w-full text-left px-4 py-2 text-red-300 hover:bg-red-900/20 transition-colors"
+          >
+            Eliminar
+          </button>
         </div>
       )}
     </div>
