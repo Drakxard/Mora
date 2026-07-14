@@ -122,8 +122,12 @@ const Explorer: React.FC = () => {
     return PRESENTATION_BACKGROUND_EXTENSIONS.has(extension)
   }
 
-  const isHiddenRootFile = (file: FileItem, path: string[]) => {
-    return path.length === 0 && file.isDirectory && file.name.toLowerCase() === PRESENTATION_BACKGROUNDS_DIR
+  const isPresentationBackgroundsDirectory = (file: FileItem) => {
+    return file.isDirectory && file.name.toLowerCase() === PRESENTATION_BACKGROUNDS_DIR
+  }
+
+  const filterVisibleFiles = (nextFiles: FileItem[]) => {
+    return nextFiles.filter((file) => file.name !== TTS_METADATA_FILE && !isPresentationBackgroundsDirectory(file))
   }
 
   const replacePresentationBackgrounds = (urls: string[]) => {
@@ -312,7 +316,7 @@ const Explorer: React.FC = () => {
           url: file.isDirectory ? undefined : `file://${file.path}`,
         }))
 
-      setFiles(fileItems)
+      setFiles(filterVisibleFiles(fileItems))
       setCurrentElectronDirectoryPath(directoryPath)
       await loadTtsMetadataFromElectron(directoryPath)
       await loadPresentationBackgroundsFromElectron(directoryPath)
@@ -625,7 +629,7 @@ const Explorer: React.FC = () => {
     try {
       const contents = await getDirectoryContents(directoryHandle)
       revokeFileUrls(files)
-      setFiles(contents.filter((file) => file.name !== TTS_METADATA_FILE && !isHiddenRootFile(file, path)))
+      setFiles(filterVisibleFiles(contents))
       setCurrentDirectoryHandle(directoryHandle)
       await loadTtsMetadataFromDirectory(directoryHandle)
     } catch (error) {
@@ -878,6 +882,10 @@ const Explorer: React.FC = () => {
       throw new Error("El nombre no puede estar vacio.")
     }
 
+    if (sanitizedName.toLowerCase() === PRESENTATION_BACKGROUNDS_DIR) {
+      throw new Error("El nombre fondos esta reservado para los fondos de presentacion.")
+    }
+
     return sanitizedName
   }
 
@@ -895,7 +903,7 @@ const Explorer: React.FC = () => {
   })
 
   const applyRenamedFileLocally = (oldPath: string, renamedFile: FileItem) => {
-    setFiles((currentFiles) => currentFiles.map((item) => (item.path === oldPath ? renamedFile : item)))
+    setFiles((currentFiles) => filterVisibleFiles(currentFiles.map((item) => (item.path === oldPath ? renamedFile : item))))
     setCurrentAudioFile((currentFile) => (currentFile?.path === oldPath ? renamedFile : currentFile))
   }
 
@@ -921,7 +929,7 @@ const Explorer: React.FC = () => {
       }
 
       setIsCreatingFolder(false)
-      setFiles((currentFiles) => [...currentFiles, createdFolder])
+      setFiles((currentFiles) => filterVisibleFiles([...currentFiles, createdFolder]))
       return createdFolder
     }
 
@@ -945,13 +953,17 @@ const Explorer: React.FC = () => {
     }
 
     setIsCreatingFolder(false)
-    setFiles((currentFiles) => [...currentFiles, createdFolder])
+    setFiles((currentFiles) => filterVisibleFiles([...currentFiles, createdFolder]))
     return createdFolder
   }
 
   const handleRenameFile = async (file: FileItem, nextName: string): Promise<FileItem | null> => {
     if (file.path === "__new-folder__") {
       return createFolderInCurrentDirectory(nextName)
+    }
+
+    if (isPresentationBackgroundsDirectory(file)) {
+      throw new Error("La carpeta fondos esta reservada para la presentacion.")
     }
 
     const normalizedName = normalizeFileRename(file, nextName)
@@ -1103,6 +1115,11 @@ const Explorer: React.FC = () => {
   }
 
   const handleDeleteFile = async (file: FileItem) => {
+    if (isPresentationBackgroundsDirectory(file)) {
+      alert("La carpeta fondos esta reservada para la presentacion.")
+      return
+    }
+
     if (!confirm(`Eliminar "${file.name}"?`)) return
 
     try {
