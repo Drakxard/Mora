@@ -4,15 +4,20 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { Check, Clock, Loader2, Pause, Pencil, Play, RotateCcw, Save, Send, Square, X } from "lucide-react"
 import Button from "../ui/Button"
-import type { GroqRateLimitInfo } from "../../utils/tts"
+import {
+  fetchAzureSpanishVoices,
+  fetchAzureTtsLimits,
+  type AzureTtsLimitInfo,
+  type AzureTtsVoice,
+} from "../../utils/tts"
 
 interface TtsModalProps {
   isOpen: boolean
   onClose: () => void
-  selectedModel: string
+  selectedVoice: string
   canSaveToCurrentFolder: boolean
-  onFetchRateLimits: () => Promise<GroqRateLimitInfo>
-  onGenerate: (text: string) => Promise<{ audio: ArrayBuffer; fileName: string; rateLimit?: GroqRateLimitInfo }>
+  onVoiceChange: (voiceShortName: string) => void
+  onGenerate: (text: string) => Promise<{ audio: ArrayBuffer; fileName: string }>
   onConfirm: (audio: ArrayBuffer, fileName: string, text: string) => Promise<string>
 }
 
@@ -38,11 +43,7 @@ interface ParsedTtsSegment {
 
 const DEFAULT_DELAY_SECONDS = 7
 const DEFAULT_GENERATION_SECONDS = 4
-const REQUESTS_PER_MINUTE_LIMIT = 10
-const REQUESTS_PER_DAY_LIMIT = 100
-const TOKENS_PER_MINUTE_LIMIT = 1200
-const TOKENS_PER_DAY_LIMIT = 3600
-const APPROX_CHARS_PER_TOKEN = 4
+const REQUESTS_PER_MINUTE_LIMIT = 20
 
 const extractTrailingTitle = (value: string): ParsedTtsSegment | null => {
   const titleMatch = value.match(/\s*\{([^{}]*)\}\s*$/)
@@ -124,60 +125,12 @@ const ensureWavExtension = (value: string) => {
   return trimmedValue.toLowerCase().endsWith(".wav") ? trimmedValue : `${trimmedValue}.wav`
 }
 
-const estimateTokens = (segments: ParsedTtsSegment[]) =>
-  segments.reduce((total, segment) => total + Math.ceil(segment.text.length / APPROX_CHARS_PER_TOKEN), 0)
-
-const estimateMaxTokensPerMinute = (segments: ParsedTtsSegment[], secondsBetweenStarts: number) => {
-  const tokenCounts = segments.map((segment) => Math.ceil(segment.text.length / APPROX_CHARS_PER_TOKEN))
-  let maxTokens = 0
-
-  tokenCounts.forEach((_, startIndex) => {
-    const windowTokens = tokenCounts.reduce((total, tokens, index) => {
-      const elapsedSeconds = (index - startIndex) * secondsBetweenStarts
-      return index >= startIndex && elapsedSeconds < 60 ? total + tokens : total
-    }, 0)
-    maxTokens = Math.max(maxTokens, windowTokens)
-  })
-
-  return maxTokens
-}
-
-const hasRateLimitValue = (value: number | undefined): value is number =>
-  typeof value === "number" && Number.isFinite(value)
-
-const parseResetSeconds = (value?: string) => {
-  if (!value) return undefined
-
-  const trimmedValue = value.trim().toLowerCase()
-  const numericValue = Number(trimmedValue)
-  if (Number.isFinite(numericValue)) {
-    return Math.max(0, Math.ceil(numericValue))
-  }
-
-  const unitMatches = [...trimmedValue.matchAll(/(\d+(?:\.\d+)?)\s*(ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)/g)]
-  if (unitMatches.length) {
-    const seconds = unitMatches.reduce((total, match) => {
-      const amount = Number(match[1])
-      const unit = match[2]
-      if (!Number.isFinite(amount)) return total
-      if (unit === "ms") return total + amount / 1000
-      if (unit.startsWith("m")) return total + amount * 60
-      if (unit.startsWith("h")) return total + amount * 3600
-      return total + amount
-    }, 0)
-
-    return Math.max(0, Math.ceil(seconds))
-  }
-
-  return undefined
-}
-
 const TtsModal: React.FC<TtsModalProps> = ({
   isOpen,
   onClose,
-  selectedModel,
+  selectedVoice,
   canSaveToCurrentFolder,
-  onFetchRateLimits,
+  onVoiceChange,
   onGenerate,
   onConfirm,
 }) => {
@@ -190,8 +143,11 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const [isConfirming, setIsConfirming] = useState(false)
   const [delaySeconds, setDelaySeconds] = useState(DEFAULT_DELAY_SECONDS)
   const [averageGenerationSeconds, setAverageGenerationSeconds] = useState(DEFAULT_GENERATION_SECONDS)
-  const [rateLimit, setRateLimit] = useState<GroqRateLimitInfo | null>(null)
-  const [isLoadingRateLimit, setIsLoadingRateLimit] = useState(false)
+  const [voices, setVoices] = useState<AzureTtsVoice[]>([])
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false)
+  const [voiceLoadError, setVoiceLoadError] = useState("")
+  const [ttsLimits, setTtsLimits] = useState<AzureTtsLimitInfo | null>(null)
+  const [isLoadingLimits, setIsLoadingLimits] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false)
   const [retryingItemId, setRetryingItemId] = useState<string | null>(null)
@@ -203,10 +159,6 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const completedDurationsRef = useRef<number[]>([])
   const delayTimerRef = useRef<number | null>(null)
   const delayResolverRef = useRef<(() => void) | null>(null)
-  const onFetchRateLimitsRef = useRef(onFetchRateLimits)
-  const lastRemainingTokensRef = useRef<number | null>(null)
-  const lastRemainingRequestsRef = useRef<number | null>(null)
-  const approximateTokensUsedRef = useRef(0)
   const generatedBaseFileNameRef = useRef("")
 
   const revokeQueueAudioUrls = (items: QueueItem[]) => {
@@ -251,10 +203,6 @@ const TtsModal: React.FC<TtsModalProps> = ({
     }
   }, [])
 
-  useEffect(() => {
-    onFetchRateLimitsRef.current = onFetchRateLimits
-  }, [onFetchRateLimits])
-
   const resetModal = () => {
     previewAudioRef.current?.pause()
     setText("")
@@ -268,34 +216,10 @@ const TtsModal: React.FC<TtsModalProps> = ({
     setRetryingItemId(null)
     setDelaySeconds(DEFAULT_DELAY_SECONDS)
     setAverageGenerationSeconds(DEFAULT_GENERATION_SECONDS)
-    setRateLimit(null)
-    setIsLoadingRateLimit(false)
     stopRequestedRef.current = false
     pendingPreviewPlayRef.current = null
     completedDurationsRef.current = []
-    lastRemainingTokensRef.current = null
-    lastRemainingRequestsRef.current = null
-    approximateTokensUsedRef.current = 0
     generatedBaseFileNameRef.current = ""
-  }
-
-  const applyRateLimitSnapshot = (nextRateLimit: GroqRateLimitInfo, fallbackText?: string) => {
-    if (hasRateLimitValue(nextRateLimit.remainingTokens) && lastRemainingTokensRef.current !== null) {
-      const tokenDelta = lastRemainingTokensRef.current - nextRateLimit.remainingTokens
-      approximateTokensUsedRef.current += tokenDelta > 0 ? tokenDelta : fallbackText ? Math.ceil(fallbackText.length / APPROX_CHARS_PER_TOKEN) : 0
-    } else if (fallbackText) {
-      approximateTokensUsedRef.current += Math.ceil(fallbackText.length / APPROX_CHARS_PER_TOKEN)
-    }
-
-    if (hasRateLimitValue(nextRateLimit.remainingTokens)) {
-      lastRemainingTokensRef.current = nextRateLimit.remainingTokens
-    }
-
-    if (hasRateLimitValue(nextRateLimit.remainingRequests)) {
-      lastRemainingRequestsRef.current = nextRateLimit.remainingRequests
-    }
-
-    setRateLimit(nextRateLimit)
   }
 
   useEffect(() => {
@@ -309,29 +233,50 @@ const TtsModal: React.FC<TtsModalProps> = ({
     if (!isOpen) return
 
     let isCancelled = false
-    setIsLoadingRateLimit(true)
 
-    onFetchRateLimitsRef.current()
-      .then((nextRateLimit) => {
-        if (!isCancelled) {
-          applyRateLimitSnapshot(nextRateLimit)
+    setIsLoadingVoices(true)
+    setVoiceLoadError("")
+    fetchAzureSpanishVoices()
+      .then((nextVoices) => {
+        if (isCancelled) return
+        setVoices(nextVoices)
+        if (nextVoices.length && !nextVoices.some((voice) => voice.shortName === selectedVoice)) {
+          onVoiceChange(nextVoices[0].shortName)
         }
       })
       .catch((err: any) => {
-        if (!isCancelled && err.rateLimit) {
-          applyRateLimitSnapshot(err.rateLimit)
+        if (!isCancelled) {
+          setVoiceLoadError(err.message || "No se pudieron cargar las voces de Azure Speech.")
         }
       })
       .finally(() => {
         if (!isCancelled) {
-          setIsLoadingRateLimit(false)
+          setIsLoadingVoices(false)
+        }
+      })
+
+    setIsLoadingLimits(true)
+    fetchAzureTtsLimits()
+      .then((nextLimits) => {
+        if (!isCancelled) {
+          setTtsLimits(nextLimits)
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setTtsLimits(null)
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoadingLimits(false)
         }
       })
 
     return () => {
       isCancelled = true
     }
-  }, [isOpen])
+  }, [isOpen, onVoiceChange, selectedVoice])
 
   useEffect(() => {
     const audio = previewAudioRef.current
@@ -388,49 +333,14 @@ const TtsModal: React.FC<TtsModalProps> = ({
       }, Math.max(0, seconds) * 1000)
     })
 
-  const waitForRateLimitResetIfNeeded = async (nextText: string, latestRateLimit?: GroqRateLimitInfo) => {
-    const currentRateLimit = latestRateLimit || rateLimit
-    if (!currentRateLimit) return false
-
-    const nextTextTokens = Math.ceil(nextText.length / APPROX_CHARS_PER_TOKEN)
-    const requestResetSeconds = parseResetSeconds(currentRateLimit.resetRequests)
-    const tokenResetSeconds = parseResetSeconds(currentRateLimit.resetTokens)
-    const needsRequestReset =
-      hasRateLimitValue(currentRateLimit.remainingRequests) && currentRateLimit.remainingRequests < 1
-    const needsTokenReset =
-      hasRateLimitValue(currentRateLimit.remainingTokens) && currentRateLimit.remainingTokens < nextTextTokens
-    const waitSeconds = Math.max(
-      needsRequestReset ? requestResetSeconds ?? 0 : 0,
-      needsTokenReset ? tokenResetSeconds ?? 0 : 0,
-    )
-
-    if ((needsRequestReset || needsTokenReset) && waitSeconds <= 0) {
-      setError(
-        needsRequestReset
-          ? "Groq informa 0 solicitudes restantes, pero no envio un reset utilizable."
-          : "Groq informa tokens insuficientes, pero no envio un reset utilizable.",
-      )
-      return false
-    }
-
-    if (waitSeconds > 0) {
-      const reason = needsRequestReset ? "solicitudes" : "tokens"
-      setSummary(`Pausando ${formatDuration(waitSeconds)} por limite de ${reason} de Groq.`)
-      await waitBeforeNextRequest(waitSeconds)
-      return true
-    }
-
-    return false
-  }
-
   const validateBeforeProcessing = (segments: unknown[]) => {
     if (segments.length === 0) {
       setError("Ingresa texto para generar el audio.")
       return false
     }
 
-    if (!selectedModel) {
-      setError("Selecciona un modelo TTS primero.")
+    if (!selectedVoice) {
+      setError("Selecciona una voz TTS primero.")
       return false
     }
 
@@ -489,9 +399,6 @@ const TtsModal: React.FC<TtsModalProps> = ({
 
         try {
           const result = await onGenerate(item.text)
-          if (result.rateLimit) {
-            applyRateLimitSnapshot(result.rateLimit, item.text)
-          }
           baseFileName = baseFileName || result.fileName
           generatedBaseFileNameRef.current = baseFileName
           applyQueueItemsUpdate((items) =>
@@ -524,18 +431,12 @@ const TtsModal: React.FC<TtsModalProps> = ({
 
           const nextItem = initialItems[index + 1]
           if (!stopRequestedRef.current && nextItem) {
-            const waitedForReset = await waitForRateLimitResetIfNeeded(nextItem.text, result.rateLimit)
             if (stopRequestedRef.current) {
               continue
             }
-            if (!waitedForReset) {
-              await waitBeforeNextRequest()
-            }
+            await waitBeforeNextRequest()
           }
         } catch (err: any) {
-          if (err.rateLimit) {
-            applyRateLimitSnapshot(err.rateLimit, item.text)
-          }
           const message = err.message || "No se pudo generar el audio."
           updateQueueItem(item.id, { status: "error", error: message })
 
@@ -685,11 +586,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
     const startedAt = performance.now()
 
     try {
-      await waitForRateLimitResetIfNeeded(item.text)
       const result = await onGenerate(item.text)
-      if (result.rateLimit) {
-        applyRateLimitSnapshot(result.rateLimit, item.text)
-      }
 
       const currentItems = queueItemsRef.current
       const itemIndex = Math.max(
@@ -722,9 +619,6 @@ const TtsModal: React.FC<TtsModalProps> = ({
       setSelectedItemId(itemId)
       setSummary("Solicitud regenerada. Confirma para guardarla.")
     } catch (err: any) {
-      if (err.rateLimit) {
-        applyRateLimitSnapshot(err.rateLimit, item.text)
-      }
       const message = err.message || "No se pudo reintentar el TTS."
       updateQueueItem(itemId, { status: "error", error: message })
       setError(message)
@@ -785,16 +679,8 @@ const TtsModal: React.FC<TtsModalProps> = ({
   if (!isOpen) return null
 
   const segments = parseTtsSegments(text)
-  const estimatedTokens = estimateTokens(segments)
   const estimatedSeconds = segments.length * averageGenerationSeconds + Math.max(0, segments.length - 1) * delaySeconds
   const estimatedSecondsBetweenStarts = Math.max(1, averageGenerationSeconds + delaySeconds)
-  const estimatedMinuteTokens = estimateMaxTokensPerMinute(segments, estimatedSecondsBetweenStarts)
-  const requestDayLimit = rateLimit?.limitRequests ?? REQUESTS_PER_DAY_LIMIT
-  const tokenMinuteLimit = rateLimit?.limitTokens ?? TOKENS_PER_MINUTE_LIMIT
-  const remainingRequests = rateLimit?.remainingRequests
-  const remainingTokens = rateLimit?.remainingTokens
-  const requestResetSeconds = parseResetSeconds(rateLimit?.resetRequests)
-  const tokenResetSeconds = parseResetSeconds(rateLimit?.resetTokens)
   const completedCount = queueItems.filter((item) => item.status === "done").length
   const pendingConfirmCount = queueItems.filter((item) => item.status === "done" && item.audioBuffer && !item.fileName).length
   const confirmedCount = queueItems.filter((item) => item.status === "done" && item.fileName).length
@@ -802,23 +688,16 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const hasPendingConfirmations = pendingConfirmCount > 0
   const isQueueMode = segments.length > 1
   const estimatedRequestRate = Math.ceil(60 / estimatedSecondsBetweenStarts)
-  const exceedsDailyRequests = segments.length > requestDayLimit
-  const exceedsKnownRemainingRequests = hasRateLimitValue(remainingRequests) && segments.length > remainingRequests
-  const exceedsDailyTokens = estimatedTokens > TOKENS_PER_DAY_LIMIT
-  const exceedsMinuteTokens = estimatedMinuteTokens > tokenMinuteLimit
-  const exceedsKnownRemainingTokens = hasRateLimitValue(remainingTokens) && estimatedMinuteTokens > remainingTokens
-  const limitWarning = exceedsDailyRequests
-    ? `La cola supera el limite diario de ${requestDayLimit} solicitudes.`
-    : exceedsKnownRemainingRequests
-      ? `Groq informa ${remainingRequests} solicitudes restantes hoy; reduce la cola.`
-      : exceedsDailyTokens
-        ? `El texto estimado supera el limite diario de ${TOKENS_PER_DAY_LIMIT.toLocaleString("en-US")} tokens.`
-        : exceedsMinuteTokens
-          ? `La ventana estimada supera ${tokenMinuteLimit.toLocaleString("en-US")} tokens por minuto; sube el retraso o divide el lote si falla.`
-          : exceedsKnownRemainingTokens
-            ? `Groq informa ${remainingTokens?.toLocaleString("en-US")} tokens restantes en la ventana actual. Espera el reset o sube el retraso.`
-            : ""
-  const exceedsHardLimit = exceedsKnownRemainingRequests && !hasPendingConfirmations
+  const limitWarning =
+    estimatedRequestRate > REQUESTS_PER_MINUTE_LIMIT
+      ? `El ritmo estimado supera ${REQUESTS_PER_MINUTE_LIMIT} solicitudes por minuto; sube el retraso si Azure responde 429.`
+      : ""
+  const hasRateLimitValue = (_value: unknown) => false
+  const requestResetSeconds = 0
+  const tokenResetSeconds = 0
+  const rateLimit = { resetRequests: "", resetTokens: "" }
+  const exceedsMinuteTokens = false
+  const exceedsKnownRemainingTokens = false
   const displayItems: QueueItem[] = queueItems.length
     ? queueItems
     : segments.map((segment, index) => ({
@@ -838,7 +717,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-text-primary">Generar audio TTS</h2>
             <p className="mt-1 truncate text-xs text-text-tertiary">
-              Modelo: {selectedModel || "No seleccionado"} · {segments.length || 0} solicitud
+              Voz: {selectedVoice || "No seleccionada"} · {segments.length || 0} solicitud
               {segments.length === 1 ? "" : "es"}
             </p>
           </div>
@@ -855,6 +734,48 @@ const TtsModal: React.FC<TtsModalProps> = ({
         <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-4 lg:grid-cols-[280px_minmax(0,1fr)_minmax(320px,0.9fr)] lg:overflow-hidden">
           <aside className="min-h-0 overflow-y-auto rounded-md border border-background bg-background-tertiary p-4">
             <div className="space-y-4">
+              <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-text-primary">Voces en español</span>
+                  <span className="text-xs text-text-tertiary">{isLoadingVoices ? "cargando" : voices.length}</span>
+                </div>
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {voices.map((voice) => {
+                    const isSelectedVoice = voice.shortName === selectedVoice
+
+                    return (
+                      <button
+                        key={voice.shortName}
+                        type="button"
+                        onClick={() => onVoiceChange(voice.shortName)}
+                        disabled={isProcessing || isConfirming}
+                        className={`w-full rounded-md border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                          isSelectedVoice
+                            ? "border-primary/70 bg-primary/10"
+                            : "border-background bg-background-secondary hover:border-background-tertiary"
+                        }`}
+                      >
+                        <span className="block truncate text-sm font-medium text-text-primary">
+                          {voice.localName || voice.displayName || voice.shortName}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-text-secondary">
+                          {voice.locale} · {voice.gender || "Voz"} · {voice.voiceType || "Azure"}
+                        </span>
+                        <span className="mt-1 block truncate font-mono text-[11px] text-text-tertiary">
+                          {voice.shortName}
+                        </span>
+                      </button>
+                    )
+                  })}
+                  {!isLoadingVoices && voices.length === 0 && (
+                    <div className="rounded-md border border-background bg-background-secondary p-3 text-xs text-text-secondary">
+                      {voiceLoadError || "No hay voces disponibles."}
+                    </div>
+                  )}
+                </div>
+                {voiceLoadError && voices.length > 0 && <p className="mt-2 text-xs text-red-300">{voiceLoadError}</p>}
+              </div>
+
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-text-primary">
                   <Clock size={16} />
@@ -887,20 +808,16 @@ const TtsModal: React.FC<TtsModalProps> = ({
               </div>
               <div className="rounded-md border border-background bg-background-secondary px-3 py-2 text-xs text-text-secondary">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span>Limites actuales de Groq</span>
-                  <span className="text-text-tertiary">{isLoadingRateLimit ? "consultando" : "headers API"}</span>
+                  <span>Limites Azure Speech</span>
+                  <span className="text-text-tertiary">{isLoadingLimits ? "consultando" : ttsLimits?.tier || "F0"}</span>
                 </div>
                 <div className="mt-2 grid grid-cols-1 gap-2">
                   <p>
-                    Solicitudes actuales:{" "}
+                    Transacciones:{" "}
                     <span className="font-mono text-text-primary">
-                      {hasRateLimitValue(remainingRequests)
-                        ? `${remainingRequests}/${requestDayLimit}`
-                        : isLoadingRateLimit
-                          ? "consultando"
-                          : "No disponible"}
+                      {ttsLimits?.transactionsLabel || (isLoadingLimits ? "consultando" : "20 transacciones / 60s")}
                     </span>
-                    {rateLimit?.resetRequests ? (
+                    {false ? (
                       <span className="text-text-tertiary">
                         {" "}
                         · reset {hasRateLimitValue(requestResetSeconds) ? `en ${formatDuration(requestResetSeconds)}` : rateLimit.resetRequests}
@@ -908,19 +825,15 @@ const TtsModal: React.FC<TtsModalProps> = ({
                     ) : null}
                   </p>
                   <p>
-                    Tokens actuales:{" "}
+                    Audio maximo:{" "}
                     <span
                       className={`font-mono ${
                         exceedsMinuteTokens || exceedsKnownRemainingTokens ? "text-red-300" : "text-text-primary"
                       }`}
                     >
-                      {hasRateLimitValue(remainingTokens)
-                        ? `${remainingTokens.toLocaleString("en-US")}/${tokenMinuteLimit.toLocaleString("en-US")}`
-                        : isLoadingRateLimit
-                          ? "consultando"
-                          : "No disponible"}
+                      {ttsLimits?.maxAudioLengthLabel || (isLoadingLimits ? "consultando" : "10 min por request")}
                     </span>
-                    {rateLimit?.resetTokens ? (
+                    {false ? (
                       <span className="text-text-tertiary">
                         {" "}
                         · reset {hasRateLimitValue(tokenResetSeconds) ? `en ${formatDuration(tokenResetSeconds)}` : rateLimit.resetTokens}
@@ -1159,9 +1072,8 @@ const TtsModal: React.FC<TtsModalProps> = ({
                 isProcessing ||
                 isConfirming ||
                 segments.length === 0 ||
-                !selectedModel ||
+                !selectedVoice ||
                 !canSaveToCurrentFolder ||
-                exceedsHardLimit ||
                 (hasGeneratedResults && !hasPendingConfirmations && confirmedCount > 0)
               }
               leftIcon={

@@ -1,142 +1,88 @@
-import { getApiKey } from "./storage"
-
 export interface TtsAudioResponse {
   audio: ArrayBuffer
   contentType: string
-  rateLimit?: GroqRateLimitInfo
 }
 
-export interface GroqRateLimitInfo {
-  limitRequests?: number
-  remainingRequests?: number
-  resetRequests?: string
-  limitTokens?: number
-  remainingTokens?: number
-  resetTokens?: string
-  retryAfter?: string
+export interface AzureTtsVoice {
+  name: string
+  displayName: string
+  localName: string
+  shortName: string
+  gender: string
+  locale: string
+  localeName: string
+  styleList?: string[]
+  sampleRateHertz?: string
+  voiceType?: string
+  status?: string
+  wordsPerMinute?: string
 }
 
-export const TTS_VOICE = "abdullah"
-export const TTS_RESPONSE_FORMAT = "wav"
-
-let cachedGroqRateLimit: GroqRateLimitInfo | null = null
-
-const parseRateLimitNumber = (value: string | null) => {
-  if (!value) return undefined
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
+export interface AzureTtsLimitInfo {
+  tier: "F0" | "S0" | string
+  transactionsLabel: string
+  maxAudioLengthLabel: string
+  details: string
 }
 
-const getGroqRateLimitInfo = (headers: Headers): GroqRateLimitInfo => ({
-  limitRequests: parseRateLimitNumber(headers.get("x-ratelimit-limit-requests")),
-  remainingRequests: parseRateLimitNumber(headers.get("x-ratelimit-remaining-requests")),
-  resetRequests: headers.get("x-ratelimit-reset-requests") || undefined,
-  limitTokens: parseRateLimitNumber(headers.get("x-ratelimit-limit-tokens")),
-  remainingTokens: parseRateLimitNumber(headers.get("x-ratelimit-remaining-tokens")),
-  resetTokens: headers.get("x-ratelimit-reset-tokens") || undefined,
-  retryAfter: headers.get("retry-after") || undefined,
-})
-
-const cacheGroqRateLimitInfo = (rateLimit: GroqRateLimitInfo) => {
-  cachedGroqRateLimit = {
-    ...cachedGroqRateLimit,
-    ...rateLimit,
+const parseJsonError = async (response: Response, fallback: string) => {
+  try {
+    const data = await response.clone().json()
+    return data?.error || data?.message || fallback
+  } catch {
+    const text = await response.text().catch(() => "")
+    return text || fallback
   }
-
-  return cachedGroqRateLimit
 }
 
-export async function fetchGroqRateLimits(): Promise<GroqRateLimitInfo> {
-  if (cachedGroqRateLimit) {
-    return cachedGroqRateLimit
-  }
-
-  const apiKey = getApiKey()
-
-  if (!apiKey) {
-    throw new Error("API key de Groq no encontrada. Configura tu API key en los ajustes de la aplicaciÃ³n.")
-  }
-
-  const response = await fetch("https://api.groq.com/openai/v1/models", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-  })
-
-  const rateLimit = cacheGroqRateLimitInfo(getGroqRateLimitInfo(response.headers))
+export async function fetchAzureSpanishVoices(): Promise<AzureTtsVoice[]> {
+  const response = await fetch("/api/azure-tts/voices")
 
   if (!response.ok) {
-    const error = new Error(`No se pudieron consultar los limites de Groq: ${response.statusText}`) as Error & {
-      rateLimit?: GroqRateLimitInfo
-    }
-    error.rateLimit = rateLimit
-    throw error
+    throw new Error(await parseJsonError(response, "No se pudieron cargar las voces de Azure Speech."))
   }
 
-  return rateLimit
+  const data = await response.json()
+  return Array.isArray(data.voices) ? data.voices : []
 }
 
-export async function generateTtsAudio(input: string, model: string): Promise<TtsAudioResponse> {
-  const apiKey = getApiKey()
+export async function fetchAzureTtsLimits(): Promise<AzureTtsLimitInfo> {
+  const response = await fetch("/api/azure-tts/limits")
 
-  if (!apiKey) {
-    throw new Error("API key de Groq no encontrada. Configura tu API key en los ajustes de la aplicación.")
+  if (!response.ok) {
+    throw new Error(await parseJsonError(response, "No se pudieron consultar los limites de Azure Speech."))
   }
 
+  return response.json()
+}
+
+export async function generateTtsAudio(input: string, voiceShortName: string): Promise<TtsAudioResponse> {
   const text = input.trim()
   if (!text) {
     throw new Error("Ingresa texto para generar el audio.")
   }
 
-  if (!model) {
-    throw new Error("Selecciona un modelo TTS primero.")
+  if (!voiceShortName) {
+    throw new Error("Selecciona una voz TTS primero.")
   }
 
-  const response = await fetch("https://api.groq.com/openai/v1/audio/speech", {
+  const response = await fetch("/api/azure-tts/speech", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model,
-      voice: TTS_VOICE,
-      input: text,
-      response_format: TTS_RESPONSE_FORMAT,
+      text,
+      voice: voiceShortName,
     }),
   })
 
   if (!response.ok) {
-    let message = `Error ${response.status}: ${response.statusText}`
-    const rateLimit = cacheGroqRateLimitInfo(getGroqRateLimitInfo(response.headers))
-
-    try {
-      const errorData = await response.clone().json()
-      if (response.status === 401) {
-        message = "API key inválida. Verifica tu configuración."
-      } else if (response.status === 429) {
-        message = "Límite de solicitudes alcanzado. Espera un momento antes de intentar nuevamente."
-      } else if (response.status === 400) {
-        message = errorData.error?.message || "Solicitud inválida. Verifica el texto y el modelo TTS."
-      } else {
-        message = errorData.error?.message || message
-      }
-    } catch {
-      const errorText = await response.text().catch(() => "")
-      if (errorText) {
-        message = errorText
-      }
-    }
-
-    const error = new Error(message) as Error & { rateLimit?: GroqRateLimitInfo }
-    error.rateLimit = rateLimit
-    throw error
+    throw new Error(await parseJsonError(response, `Error ${response.status}: ${response.statusText}`))
   }
 
   return {
     audio: await response.arrayBuffer(),
     contentType: response.headers.get("content-type") || "audio/wav",
-    rateLimit: cacheGroqRateLimitInfo(getGroqRateLimitInfo(response.headers)),
   }
 }

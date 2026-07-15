@@ -9,6 +9,7 @@ interface AppConfig {
     chat?: string
     tts?: string
   }
+  selectedTtsVoice?: string
   userApiKey?: string // Nueva propiedad para la API key del usuario
   isFirstRun?: boolean // Nueva propiedad para detectar primer inicio
   apiKeyConfigured?: boolean // Nueva propiedad para verificar si la API key está configurada
@@ -117,6 +118,17 @@ export const saveSelectedModel = (type: StoredModelType, modelId: string): void 
 export const getSelectedModel = (type: StoredModelType): string | undefined => {
   const config = loadConfig()
   return config.selectedModels?.[type]
+}
+
+export const saveSelectedTtsVoice = (shortName: string): void => {
+  const config = loadConfig()
+  config.selectedTtsVoice = shortName
+  saveConfig(config)
+}
+
+export const getSelectedTtsVoice = (): string | undefined => {
+  const config = loadConfig()
+  return config.selectedTtsVoice
 }
 
 // Funciones para manejar el directorio con File System Access API (Web)

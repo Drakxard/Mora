@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { FolderOpen, Maximize2, Settings } from "lucide-react"
 import type { FileItem, DirectoryState } from "../types"
 import {
@@ -24,6 +24,8 @@ import {
   isFirstRun,
   isApiKeyConfigured,
   markFirstRunComplete,
+  getSelectedTtsVoice,
+  saveSelectedTtsVoice,
 } from "../utils/storage"
 import Breadcrumb from "./FileExplorer/Breadcrumb"
 import FileList from "./FileExplorer/FileList"
@@ -35,7 +37,7 @@ import ApiKeySetupModal from "./Modals/ApiKeySetupModal"
 import SettingsModal from "./Settings/SettingsModal"
 import TtsModal from "./Modals/TtsModal"
 import PresentationMode from "./PresentationMode"
-import { fetchGroqRateLimits, generateTtsAudio } from "../utils/tts"
+import { generateTtsAudio } from "../utils/tts"
 
 const TTS_METADATA_FILE = ".mora-tts.json"
 const APP_CONFIG_FILE = ".mora-config.json"
@@ -52,7 +54,8 @@ const getRandomPresentationBackgroundIndex = (currentIndex: number, backgroundCo
 
 interface TtsMetadataEntry {
   text: string
-  model: string
+  voice?: string
+  model?: string
   updatedAt: number
 }
 
@@ -76,9 +79,7 @@ const Explorer: React.FC = () => {
   const [chatModel, setChatModel] = useState<string>(
     () => getSelectedModel("chat") || "llama-3.3-70b-versatile",
   )
-  const [ttsModel, setTtsModel] = useState<string>(
-    () => getSelectedModel("tts") || "canopylabs/orpheus-arabic-saudi",
-  )
+  const [ttsVoice, setTtsVoice] = useState<string>(() => getSelectedTtsVoice() || "")
 
   // Directory and navigation states
   const [rootDirectoryHandle, setRootDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null)
@@ -121,6 +122,11 @@ const Explorer: React.FC = () => {
   const isElectron = () => {
     return !!window.electron
   }
+
+  const handleTtsVoiceChange = useCallback((voiceShortName: string) => {
+    setTtsVoice(voiceShortName)
+    saveSelectedTtsVoice(voiceShortName)
+  }, [])
 
   const isPresentationBackgroundFile = (fileName: string) => {
     const extension = fileName.split(".").pop()?.toLowerCase() || ""
@@ -587,7 +593,7 @@ const Explorer: React.FC = () => {
         // Resetear modelos seleccionados
         setTranscriptionModel("")
         setChatModel("")
-        setTtsModel("")
+        setTtsVoice("")
 
         console.log("🔄 Estados dependientes de API key reseteados")
       }
@@ -1122,13 +1128,18 @@ const Explorer: React.FC = () => {
     }
 
     try {
-      const result = await generateTtsAudio(metadata.text, metadata.model || ttsModel)
+      const voice = metadata.voice || ttsVoice
+      if (!voice) {
+        throw new Error("Selecciona una voz TTS primero.")
+      }
+
+      const result = await generateTtsAudio(metadata.text, voice)
       const regeneratedFile = await saveTtsAudioToCurrentFolder(result.audio, file.name)
       await saveTtsMetadata({
         ...ttsMetadata,
         [file.name]: {
           ...metadata,
-          model: metadata.model || ttsModel,
+          voice,
           updatedAt: Date.now(),
         },
       })
@@ -1305,24 +1316,23 @@ const Explorer: React.FC = () => {
   }
 
   const handleGenerateTtsPreview = async (text: string) => {
-    if (!isApiKeyConfigured()) {
+    if (false) {
       setShowApiKeySetup(true)
       throw new Error("No hay API key configurada. Configura tu API key en Configuración.")
     }
 
-    if (!ttsModel) {
-      throw new Error("Selecciona un modelo TTS primero.")
+    if (!ttsVoice) {
+      throw new Error("Selecciona una voz TTS primero.")
     }
 
     if (!hasOpenDirectory) {
       throw new Error("Abre una carpeta antes de generar audio.")
     }
 
-    const result = await generateTtsAudio(text, ttsModel)
+    const result = await generateTtsAudio(text, ttsVoice)
     return {
       audio: result.audio,
       fileName: createTtsBaseFileName(),
-      rateLimit: result.rateLimit,
     }
   }
 
@@ -1331,8 +1341,9 @@ const Explorer: React.FC = () => {
       throw new Error("No hay API key configurada. Configura tu API key en ConfiguraciÃ³n.")
     }
 
-    return fetchGroqRateLimits()
+    return null
   }
+  void handleFetchTtsRateLimits
 
   const handleConfirmTts = async (audio: ArrayBuffer, fileName: string, text: string) => {
     const normalizedFileName = normalizeTtsFileName(fileName)
@@ -1341,7 +1352,7 @@ const Explorer: React.FC = () => {
       ...ttsMetadataRef.current,
       [normalizedFileName]: {
         text,
-        model: ttsModel,
+        voice: ttsVoice,
         updatedAt: Date.now(),
       },
     })
@@ -1551,9 +1562,9 @@ const Explorer: React.FC = () => {
       <TtsModal
         isOpen={isTtsModalOpen}
         onClose={() => setIsTtsModalOpen(false)}
-        selectedModel={ttsModel}
+        selectedVoice={ttsVoice}
         canSaveToCurrentFolder={hasOpenDirectory}
-        onFetchRateLimits={handleFetchTtsRateLimits}
+        onVoiceChange={handleTtsVoiceChange}
         onGenerate={handleGenerateTtsPreview}
         onConfirm={handleConfirmTts}
       />
@@ -1564,10 +1575,8 @@ const Explorer: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         transcriptionModel={transcriptionModel}
         chatModel={chatModel}
-        ttsModel={ttsModel}
         onTranscriptionModelChange={setTranscriptionModel}
         onChatModelChange={setChatModel}
-        onTtsModelChange={setTtsModel}
       />
     </div>
   )

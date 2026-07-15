@@ -9,10 +9,8 @@ interface SettingsModalProps {
   onClose: () => void
   transcriptionModel: string
   chatModel: string
-  ttsModel: string
   onTranscriptionModelChange: (modelId: string) => void
   onChatModelChange: (modelId: string) => void
-  onTtsModelChange: (modelId: string) => void
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -20,10 +18,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   transcriptionModel,
   chatModel,
-  ttsModel,
   onTranscriptionModelChange,
   onChatModelChange,
-  onTtsModelChange,
 }) => {
   if (!isOpen) return null
 
@@ -42,7 +38,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="grid grid-cols-1 gap-4 rounded-lg bg-background-tertiary p-4">
             <ModelSelector type="transcription" value={transcriptionModel} onChange={onTranscriptionModelChange} />
             <ModelSelector type="chat" value={chatModel} onChange={onChatModelChange} />
-            <ModelSelector type="tts" value={ttsModel} onChange={onTtsModelChange} />
           </div>
         </div>
       </div>
