@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
-import { Check, Clock, Loader2, Pause, Pencil, Play, RotateCcw, Save, Send, Square, X } from "lucide-react"
+import { Check, Clock, Loader2, Pause, Pencil, Play, RotateCcw, Save, Send, Square, Star, X } from "lucide-react"
 import Button from "../ui/Button"
 import {
   fetchAzureSpanishVoices,
@@ -10,6 +10,12 @@ import {
   type AzureTtsLimitInfo,
   type AzureTtsVoice,
 } from "../../utils/tts"
+import {
+  getFavoriteTtsVoices,
+  getRotateFavoriteTtsVoices,
+  saveFavoriteTtsVoices,
+  saveRotateFavoriteTtsVoices,
+} from "../../utils/storage"
 
 interface TtsModalProps {
   isOpen: boolean
@@ -17,8 +23,8 @@ interface TtsModalProps {
   selectedVoice: string
   canSaveToCurrentFolder: boolean
   onVoiceChange: (voiceShortName: string) => void
-  onGenerate: (text: string) => Promise<{ audio: ArrayBuffer; fileName: string }>
-  onConfirm: (audio: ArrayBuffer, fileName: string, text: string) => Promise<string>
+  onGenerate: (text: string, voiceShortName?: string) => Promise<{ audio: ArrayBuffer; fileName: string }>
+  onConfirm: (audio: ArrayBuffer, fileName: string, text: string, voiceShortName?: string) => Promise<string>
 }
 
 type QueueItemStatus = "pending" | "generating" | "done" | "error" | "stopped"
@@ -33,6 +39,7 @@ interface QueueItem {
   audioUrl?: string
   isEditing?: boolean
   draftText?: string
+  voice?: string
   error?: string
 }
 
@@ -148,6 +155,9 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const [voiceLoadError, setVoiceLoadError] = useState("")
   const [ttsLimits, setTtsLimits] = useState<AzureTtsLimitInfo | null>(null)
   const [isLoadingLimits, setIsLoadingLimits] = useState(false)
+  const [favoriteVoices, setFavoriteVoices] = useState<string[]>(() => getFavoriteTtsVoices())
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false)
+  const [rotateFavoriteVoices, setRotateFavoriteVoices] = useState(() => getRotateFavoriteTtsVoices())
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false)
   const [retryingItemId, setRetryingItemId] = useState<string | null>(null)
@@ -160,6 +170,25 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const delayTimerRef = useRef<number | null>(null)
   const delayResolverRef = useRef<(() => void) | null>(null)
   const generatedBaseFileNameRef = useRef("")
+
+  const toggleFavoriteVoice = (voiceShortName: string) => {
+    setFavoriteVoices((currentFavorites) => {
+      const nextFavorites = currentFavorites.includes(voiceShortName)
+        ? currentFavorites.filter((favoriteVoice) => favoriteVoice !== voiceShortName)
+        : [...currentFavorites, voiceShortName]
+
+      saveFavoriteTtsVoices(nextFavorites)
+      return nextFavorites
+    })
+  }
+
+  const toggleRotateFavoriteVoices = () => {
+    setRotateFavoriteVoices((currentValue) => {
+      const nextValue = !currentValue
+      saveRotateFavoriteTtsVoices(nextValue)
+      return nextValue
+    })
+  }
 
   const revokeQueueAudioUrls = (items: QueueItem[]) => {
     items.forEach((item) => {
@@ -344,6 +373,11 @@ const TtsModal: React.FC<TtsModalProps> = ({
       return false
     }
 
+    if (rotateFavoriteVoices && favoriteVoices.length === 0) {
+      setError("Marca al menos una voz con estrella para activar la rotacion.")
+      return false
+    }
+
     if (!canSaveToCurrentFolder) {
       setError("Abre una carpeta antes de generar audio.")
       return false
@@ -398,7 +432,10 @@ const TtsModal: React.FC<TtsModalProps> = ({
         const startedAt = performance.now()
 
         try {
-          const result = await onGenerate(item.text)
+          const voiceForItem = rotateFavoriteVoices
+            ? favoriteVoices[index % favoriteVoices.length]
+            : selectedVoice
+          const result = await onGenerate(item.text, voiceForItem)
           baseFileName = baseFileName || result.fileName
           generatedBaseFileNameRef.current = baseFileName
           applyQueueItemsUpdate((items) =>
@@ -427,6 +464,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
             audioBuffer: result.audio,
             audioUrl: nextAudioUrl,
             draftText: item.text,
+            voice: voiceForItem,
           })
 
           const nextItem = initialItems[index + 1]
@@ -586,13 +624,16 @@ const TtsModal: React.FC<TtsModalProps> = ({
     const startedAt = performance.now()
 
     try {
-      const result = await onGenerate(item.text)
-
       const currentItems = queueItemsRef.current
       const itemIndex = Math.max(
         0,
         currentItems.findIndex((queueItem) => queueItem.id === itemId),
       )
+      const voiceForItem =
+        item.voice ||
+        (rotateFavoriteVoices && favoriteVoices.length ? favoriteVoices[itemIndex % favoriteVoices.length] : selectedVoice)
+      const result = await onGenerate(item.text, voiceForItem)
+
       const baseFileName = generatedBaseFileNameRef.current || result.fileName
       generatedBaseFileNameRef.current = baseFileName
       const targetFileName =
@@ -614,6 +655,7 @@ const TtsModal: React.FC<TtsModalProps> = ({
         audioBuffer: result.audio,
         audioUrl: nextAudioUrl,
         draftText: item.text,
+        voice: voiceForItem,
         error: undefined,
       })
       setSelectedItemId(itemId)
@@ -658,7 +700,12 @@ const TtsModal: React.FC<TtsModalProps> = ({
       for (const item of itemsToConfirm) {
         if (!item.audioBuffer) continue
 
-        const savedName = await onConfirm(item.audioBuffer, ensureWavExtension(item.targetFileName || ""), item.text)
+        const savedName = await onConfirm(
+          item.audioBuffer,
+          ensureWavExtension(item.targetFileName || ""),
+          item.text,
+          item.voice || selectedVoice,
+        )
         updateQueueItem(item.id, {
           fileName: savedName,
           targetFileName: stripWavExtension(savedName),
@@ -698,6 +745,10 @@ const TtsModal: React.FC<TtsModalProps> = ({
   const rateLimit = { resetRequests: "", resetTokens: "" }
   const exceedsMinuteTokens = false
   const exceedsKnownRemainingTokens = false
+  const favoriteVoiceSet = new Set(favoriteVoices)
+  const visibleVoices = showOnlyFavorites
+    ? voices.filter((voice) => favoriteVoiceSet.has(voice.shortName))
+    : voices
   const displayItems: QueueItem[] = queueItems.length
     ? queueItems
     : segments.map((segment, index) => ({
@@ -737,11 +788,37 @@ const TtsModal: React.FC<TtsModalProps> = ({
               <div>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-sm font-medium text-text-primary">Voces en español</span>
-                  <span className="text-xs text-text-tertiary">{isLoadingVoices ? "cargando" : voices.length}</span>
+                  <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                    <label className="inline-flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={showOnlyFavorites}
+                        onChange={(event) => setShowOnlyFavorites(event.target.checked)}
+                        className="h-3.5 w-3.5 accent-primary"
+                        disabled={isProcessing || isConfirming}
+                      />
+                      Favoritas
+                    </label>
+                    <button
+                      type="button"
+                      onClick={toggleRotateFavoriteVoices}
+                      disabled={isProcessing || isConfirming}
+                      className={`rounded border px-2 py-0.5 font-mono text-[11px] transition-colors disabled:opacity-50 ${
+                        rotateFavoriteVoices
+                          ? "border-primary/70 bg-primary/20 text-primary"
+                          : "border-background bg-background-secondary text-text-tertiary hover:text-text-primary"
+                      }`}
+                      title="Rotar voces favoritas en cada solicitud TTS"
+                    >
+                      {rotateFavoriteVoices ? "ON" : "OFF"}
+                    </button>
+                    <span>{isLoadingVoices ? "cargando" : visibleVoices.length}</span>
+                  </div>
                 </div>
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                  {voices.map((voice) => {
+                  {visibleVoices.map((voice) => {
                     const isSelectedVoice = voice.shortName === selectedVoice
+                    const isFavoriteVoice = favoriteVoiceSet.has(voice.shortName)
 
                     return (
                       <button
@@ -755,8 +832,32 @@ const TtsModal: React.FC<TtsModalProps> = ({
                             : "border-background bg-background-secondary hover:border-background-tertiary"
                         }`}
                       >
-                        <span className="block truncate text-sm font-medium text-text-primary">
-                          {voice.localName || voice.displayName || voice.shortName}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              toggleFavoriteVoice(voice.shortName)
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                toggleFavoriteVoice(voice.shortName)
+                              }
+                            }}
+                            className={`rounded p-0.5 transition-colors ${
+                              isFavoriteVoice ? "text-yellow-300" : "text-text-tertiary hover:text-text-primary"
+                            }`}
+                            title={isFavoriteVoice ? "Quitar de favoritas" : "Marcar como favorita"}
+                            aria-label={isFavoriteVoice ? "Quitar de favoritas" : "Marcar como favorita"}
+                          >
+                            <Star size={15} fill={isFavoriteVoice ? "currentColor" : "none"} />
+                          </span>
+                          <span className="block min-w-0 truncate text-sm font-medium text-text-primary">
+                            {voice.localName || voice.displayName || voice.shortName}
+                          </span>
                         </span>
                         <span className="mt-1 block truncate text-xs text-text-secondary">
                           {voice.locale} · {voice.gender || "Voz"} · {voice.voiceType || "Azure"}
@@ -767,9 +868,9 @@ const TtsModal: React.FC<TtsModalProps> = ({
                       </button>
                     )
                   })}
-                  {!isLoadingVoices && voices.length === 0 && (
+                  {!isLoadingVoices && visibleVoices.length === 0 && (
                     <div className="rounded-md border border-background bg-background-secondary p-3 text-xs text-text-secondary">
-                      {voiceLoadError || "No hay voces disponibles."}
+                      {voiceLoadError || (showOnlyFavorites ? "No hay voces favoritas." : "No hay voces disponibles.")}
                     </div>
                   )}
                 </div>

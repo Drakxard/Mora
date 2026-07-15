@@ -44,7 +44,13 @@ const APP_CONFIG_FILE = ".mora-config.json"
 const PRESENTATION_BACKGROUNDS_DIR = "fondos"
 const PRESENTATION_BACKGROUND_EXTENSIONS = new Set(["jpg", "jpeg"])
 
-const getRandomPresentationBackgroundIndex = (currentIndex: number, backgroundCount: number) => {
+const getRandomPresentationInitialBackgroundIndex = (backgroundCount: number) => {
+  if (backgroundCount <= 1) return 0
+
+  return Math.floor(Math.random() * backgroundCount)
+}
+
+const getRandomPresentationNextBackgroundIndex = (currentIndex: number, backgroundCount: number) => {
   if (backgroundCount <= 1) return 0
 
   const normalizedCurrentIndex = ((currentIndex % backgroundCount) + backgroundCount) % backgroundCount
@@ -202,21 +208,20 @@ const Explorer: React.FC = () => {
   useEffect(() => {
     if (!isPresentationOpen) {
       presentationAudioPathRef.current = null
-      setPresentationBackgroundIndex(0)
       return
     }
 
     const currentPath = currentAudioFile?.path || null
     if (presentationAudioPathRef.current === null) {
       presentationAudioPathRef.current = currentPath
-      setPresentationBackgroundIndex(0)
+      setPresentationBackgroundIndex(getRandomPresentationInitialBackgroundIndex(presentationBackgroundUrls.length))
       return
     }
 
     if (currentPath && currentPath !== presentationAudioPathRef.current) {
       presentationAudioPathRef.current = currentPath
       setPresentationBackgroundIndex((index) =>
-        getRandomPresentationBackgroundIndex(index, presentationBackgroundUrls.length),
+        getRandomPresentationNextBackgroundIndex(index, presentationBackgroundUrls.length),
       )
     }
   }, [currentAudioFile?.path, isPresentationOpen, presentationBackgroundUrls.length])
@@ -1315,13 +1320,10 @@ const Explorer: React.FC = () => {
     }
   }
 
-  const handleGenerateTtsPreview = async (text: string) => {
-    if (false) {
-      setShowApiKeySetup(true)
-      throw new Error("No hay API key configurada. Configura tu API key en Configuración.")
-    }
+  const handleGenerateTtsPreview = async (text: string, voiceOverride?: string) => {
+    const voice = voiceOverride || ttsVoice
 
-    if (!ttsVoice) {
+    if (!voice) {
       throw new Error("Selecciona una voz TTS primero.")
     }
 
@@ -1329,7 +1331,7 @@ const Explorer: React.FC = () => {
       throw new Error("Abre una carpeta antes de generar audio.")
     }
 
-    const result = await generateTtsAudio(text, ttsVoice)
+    const result = await generateTtsAudio(text, voice)
     return {
       audio: result.audio,
       fileName: createTtsBaseFileName(),
@@ -1345,14 +1347,14 @@ const Explorer: React.FC = () => {
   }
   void handleFetchTtsRateLimits
 
-  const handleConfirmTts = async (audio: ArrayBuffer, fileName: string, text: string) => {
+  const handleConfirmTts = async (audio: ArrayBuffer, fileName: string, text: string, voiceOverride?: string) => {
     const normalizedFileName = normalizeTtsFileName(fileName)
     await saveTtsAudioToCurrentFolder(audio, normalizedFileName)
     await saveTtsMetadata({
       ...ttsMetadataRef.current,
       [normalizedFileName]: {
         text,
-        voice: ttsVoice,
+        voice: voiceOverride || ttsVoice,
         updatedAt: Date.now(),
       },
     })

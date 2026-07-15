@@ -10,6 +10,8 @@ interface AppConfig {
     tts?: string
   }
   selectedTtsVoice?: string
+  favoriteTtsVoices?: string[]
+  rotateFavoriteTtsVoices?: boolean
   userApiKey?: string // Nueva propiedad para la API key del usuario
   isFirstRun?: boolean // Nueva propiedad para detectar primer inicio
   apiKeyConfigured?: boolean // Nueva propiedad para verificar si la API key está configurada
@@ -129,6 +131,28 @@ export const saveSelectedTtsVoice = (shortName: string): void => {
 export const getSelectedTtsVoice = (): string | undefined => {
   const config = loadConfig()
   return config.selectedTtsVoice
+}
+
+export const saveFavoriteTtsVoices = (shortNames: string[]): void => {
+  const config = loadConfig()
+  config.favoriteTtsVoices = Array.from(new Set(shortNames.filter(Boolean)))
+  saveConfig(config)
+}
+
+export const getFavoriteTtsVoices = (): string[] => {
+  const config = loadConfig()
+  return Array.isArray(config.favoriteTtsVoices) ? config.favoriteTtsVoices : []
+}
+
+export const saveRotateFavoriteTtsVoices = (enabled: boolean): void => {
+  const config = loadConfig()
+  config.rotateFavoriteTtsVoices = enabled
+  saveConfig(config)
+}
+
+export const getRotateFavoriteTtsVoices = (): boolean => {
+  const config = loadConfig()
+  return config.rotateFavoriteTtsVoices === true
 }
 
 // Funciones para manejar el directorio con File System Access API (Web)
